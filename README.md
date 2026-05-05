@@ -144,3 +144,12 @@ The gateway currently routes these paths to the overlay:
 - `/.well-known/mta-sts.txt`
 - `/mail/config-v1.1.xml`
 - `/Autodiscover/Autodiscover.xml`
+
+Run the gateway integration checks with Docker:
+
+```sh
+WELLKNOWN_OVERLAY_INTEGRATION=1 go test ./docker/gateway -run TestGatewayIntegration -count=1 -v
+```
+
+The check builds the gateway image, starts it with the legacy email fixture, and
+verifies health, overlay routes, placeholder fallback, and backend proxying.
