@@ -1,0 +1,14 @@
+{
+  "routes": [
+    {
+      "path": "/.well-known/autoconfig/mail/config-v1.1.xml",
+      "file": ".well-known/autoconfig/mail/config-v1.1.xml",
+      "content_type": "application/xml"
+    },
+    {
+      "path": "/mail/config-v1.1.xml",
+      "file": ".well-known/autoconfig/mail/config-v1.1.xml",
+      "content_type": "application/xml"
+    }
+  ]
+}
