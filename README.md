@@ -95,3 +95,38 @@ location / {
 In practice, the proxy should route only the paths the overlay owns whenever
 that is convenient. The overlay itself still refuses undeclared paths.
 
+## Docker
+
+The root `Dockerfile` builds the minimal overlay image. It runs only the Go
+binary and expects a config file plus a public file tree to be mounted in:
+
+```sh
+docker build -t wellknown-overlay .
+docker run --rm -p 8765:8765 \
+  -v "$PWD/examples/overlay.json:/etc/wellknown-overlay/overlay.json:ro" \
+  -v "$PWD/examples/public:/var/lib/wellknown-overlay/public:ro" \
+  wellknown-overlay
+```
+
+The optional gateway image is derived from nginx. It runs the overlay locally
+and proxies selected standards paths to it. If `BACKEND_URL` is set, every other
+path is proxied to that backend. If `BACKEND_URL` is unset, nginx serves a small
+placeholder page instead.
+
+```sh
+docker build -f docker/gateway/Dockerfile -t wellknown-overlay-gateway .
+docker run --rm -p 8080:80 \
+  -e BACKEND_URL=http://app:3000 \
+  -v "$PWD/examples/legacy-email/overlay.json:/etc/wellknown-overlay/overlay.json:ro" \
+  -v "$PWD/examples/legacy-email/public:/var/lib/wellknown-overlay/public:ro" \
+  wellknown-overlay-gateway
+```
+
+The gateway currently routes these paths to the overlay:
+
+- `/.well-known/autoconfig/`
+- `/.well-known/openpgpkey/`
+- `/.well-known/security.txt`
+- `/.well-known/mta-sts.txt`
+- `/mail/config-v1.1.xml`
+- `/Autodiscover/Autodiscover.xml`
