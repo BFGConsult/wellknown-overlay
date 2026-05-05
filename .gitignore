@@ -1,0 +1,4 @@
+/wellknown-overlay
+dist/
+coverage.out
+.DS_Store

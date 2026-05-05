@@ -1,0 +1,15 @@
+{
+  "routes": [
+    {
+      "path": "/.well-known/security.txt",
+      "file": "security.txt",
+      "content_type": "text/plain; charset=utf-8"
+    },
+    {
+      "path": "/.well-known/autoconfig/mail/config-v1.1.xml",
+      "file": "mail/config-v1.1.xml",
+      "content_type": "application/xml"
+    }
+  ]
+}
+

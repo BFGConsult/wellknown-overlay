@@ -1,0 +1,32 @@
+package overlay
+
+import (
+	"errors"
+	"net/http"
+)
+
+func NewHTTPHandler(responder *Responder) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		response, err := responder.Render(r.URL.Path)
+		if errors.Is(err, ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", response.ContentType)
+		w.WriteHeader(response.Status)
+		if r.Method == http.MethodHead {
+			return
+		}
+		_, _ = w.Write(response.Body)
+	})
+}
