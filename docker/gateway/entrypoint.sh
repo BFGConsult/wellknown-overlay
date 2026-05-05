@@ -12,6 +12,10 @@ server {
     listen 80;
     server_name _;
 
+    location = /healthz {
+        proxy_pass ${OVERLAY_UPSTREAM};
+    }
+
     location ^~ /.well-known/autoconfig/ {
         proxy_pass ${OVERLAY_UPSTREAM};
     }
@@ -86,4 +90,3 @@ while :; do
 
     sleep 1
 done
-

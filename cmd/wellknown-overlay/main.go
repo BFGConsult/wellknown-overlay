@@ -37,6 +37,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return serve(args[2:], stderr)
 	case "render":
 		return render(args[2:], stdout)
+	case "healthcheck":
+		return healthcheck(args[2:])
 	case "help", "-h", "--help":
 		usage(stdout)
 		return nil
@@ -134,6 +136,30 @@ func render(args []string, stdout io.Writer) error {
 	return err
 }
 
+func healthcheck(args []string) error {
+	fs := flag.NewFlagSet("healthcheck", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	url := fs.String("url", "http://127.0.0.1:8765"+overlay.HealthPath, "health check URL")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	client := http.Client{
+		Timeout: 2 * time.Second,
+	}
+	resp, err := client.Get(*url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("health check failed: status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 func newHandler(configPath, root string) (http.Handler, error) {
 	responder, err := newResponder(configPath, root)
 	if err != nil {
@@ -164,5 +190,7 @@ func usage(w io.Writer) {
 commands:
   validate  validate an overlay config
   serve     serve configured overlay routes over HTTP
-  render    render one configured route to stdout`)
+  render    render one configured route to stdout
+  healthcheck
+            check an overlay HTTP endpoint`)
 }

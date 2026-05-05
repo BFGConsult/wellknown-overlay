@@ -76,9 +76,22 @@ Render a route from the command line:
 go run ./cmd/wellknown-overlay render -config examples/overlay.json -root examples/public -path /.well-known/security.txt
 ```
 
+Check a running overlay:
+
+```sh
+go run ./cmd/wellknown-overlay healthcheck -url http://127.0.0.1:8765/healthz
+```
+
+The HTTP server always exposes `GET` and `HEAD` on `/healthz`. The endpoint is
+for process health only; configured standards routes are still matched exactly.
+
 ## Reverse Proxy Sketch
 
 ```nginx
+location = /healthz {
+    proxy_pass http://127.0.0.1:8765;
+}
+
 location ^~ /.well-known/ {
     proxy_pass http://127.0.0.1:8765;
 }
@@ -124,6 +137,7 @@ docker run --rm -p 8080:80 \
 
 The gateway currently routes these paths to the overlay:
 
+- `/healthz`
 - `/.well-known/autoconfig/`
 - `/.well-known/openpgpkey/`
 - `/.well-known/security.txt`

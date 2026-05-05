@@ -16,4 +16,5 @@ COPY docker/gateway/placeholder /usr/share/wellknown-overlay/placeholder
 RUN chmod +x /usr/local/bin/wellknown-overlay-gateway
 
 EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD ["/usr/local/bin/wellknown-overlay", "healthcheck", "-url", "http://127.0.0.1/healthz"]
 ENTRYPOINT ["/usr/local/bin/wellknown-overlay-gateway"]
