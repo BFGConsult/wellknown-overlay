@@ -1,0 +1,67 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/BFGConsult/wellknown-overlay/internal/livecheck"
+)
+
+func main() {
+	if err := run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+}
+
+func run(args []string) error {
+	fs := flag.NewFlagSet("wellknown-overlay-livecheck", flag.ContinueOnError)
+	insecure := fs.Bool("insecure", false, "skip TLS certificate verification")
+	insecureShort := fs.Bool("k", false, "skip TLS certificate verification")
+	verbose := fs.Bool("v", false, "show optional failed discovery attempts even when a profile passes")
+	timeout := fs.Duration("timeout", 15*time.Second, "per-request timeout")
+	if err := fs.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return err
+	}
+	if fs.NArg() < 1 {
+		usage()
+		return fmt.Errorf("missing email address")
+	}
+
+	profiles, err := livecheck.ParseProfiles(fs.Args()[1:])
+	if err != nil {
+		return err
+	}
+
+	ok, err := livecheck.Run(context.Background(), livecheck.Options{
+		EmailAddress: fs.Arg(0),
+		Profiles:     profiles,
+		InsecureTLS:  *insecure || *insecureShort,
+		Verbose:      *verbose,
+		Timeout:      *timeout,
+	}, os.Stdout)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		os.Exit(1)
+	}
+	return nil
+}
+
+func usage() {
+	fmt.Fprintln(os.Stderr, `usage: wellknown-overlay-livecheck [options] email@example.org [THUNDERBIRD,OUTLOOK,APPLE|ALL]
+
+options:
+  -insecure  skip TLS certificate verification for diagnosis
+  -k         alias for -insecure
+  -v         show optional failed discovery attempts even when a profile passes
+  -timeout   per-request timeout, default 15s`)
+}

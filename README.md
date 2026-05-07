@@ -179,6 +179,24 @@ go run ./cmd/wellknown-overlay healthcheck -url http://127.0.0.1:8765/healthz
 The HTTP server always exposes `GET` and `HEAD` on `/healthz`. The endpoint is
 for process health only; configured standards routes are still matched exactly.
 
+Run live client-autosetup checks for a deployed domain:
+
+```sh
+go run ./cmd/wellknown-overlay-livecheck user@example.org
+go run ./cmd/wellknown-overlay-livecheck user@example.org THUNDERBIRD,OUTLOOK
+go run ./cmd/wellknown-overlay-livecheck -insecure user@example.org APPLE
+```
+
+`wellknown-overlay-livecheck` is a diagnostic companion tool. It derives the
+domain from the email address, checks the selected client discovery profiles,
+prints DNS, redirect, HTTP, TLS, and response-format details, and exits non-zero
+when any selected profile fails. Supported profiles are `THUNDERBIRD`,
+`OUTLOOK`, `APPLE`, and `ALL`; `ALL` is the default. Redirects are allowed and
+reported. TLS certificates are verified by default; `-insecure` or `-k` disables
+certificate verification for diagnosis only. Suggestions are intentionally
+deployment-neutral and refer to DNS, HTTPS certificates, reverse proxy/ingress
+routing, and overlay endpoint reachability.
+
 ## Reverse Proxy Sketch
 
 ```nginx
