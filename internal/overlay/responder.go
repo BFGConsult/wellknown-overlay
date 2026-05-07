@@ -17,8 +17,9 @@ type Response struct {
 }
 
 type Responder struct {
-	routes map[string]Route
-	files  fs.FS
+	routes          map[string]Route
+	emailAutoconfig *EmailAutoconfig
+	files           fs.FS
 }
 
 func NewResponder(cfg Config, files fs.FS) *Responder {
@@ -28,12 +29,25 @@ func NewResponder(cfg Config, files fs.FS) *Responder {
 	}
 
 	return &Responder{
-		routes: routes,
-		files:  files,
+		routes:          routes,
+		emailAutoconfig: cfg.EmailAutoconfig,
+		files:           files,
 	}
 }
 
 func (r *Responder) Render(routePath string) (Response, error) {
+	if r.emailAutoconfig != nil && isEmailAutoconfigPath(routePath) {
+		body, err := RenderEmailAutoconfig(*r.emailAutoconfig)
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{
+			Status:      http.StatusOK,
+			ContentType: "application/xml",
+			Body:        body,
+		}, nil
+	}
+
 	route, ok := r.routes[routePath]
 	if !ok {
 		return Response{Status: http.StatusNotFound}, ErrNotFound
@@ -57,4 +71,13 @@ func (r *Responder) Render(routePath string) (Response, error) {
 		ContentType: contentType,
 		Body:        body,
 	}, nil
+}
+
+func isEmailAutoconfigPath(routePath string) bool {
+	for _, path := range EmailAutoconfigPaths() {
+		if routePath == path {
+			return true
+		}
+	}
+	return false
 }

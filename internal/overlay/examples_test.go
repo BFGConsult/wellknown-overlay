@@ -90,6 +90,49 @@ func TestExamplesServeDeclaredRoutes(t *testing.T) {
 	}
 }
 
+func TestEmailAutoconfigExampleServesModuleRoutes(t *testing.T) {
+	repoRoot := findRepoRoot(t)
+	configPath := filepath.Join(repoRoot, "examples/email-autoconfig/overlay.json")
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	server := httptest.NewServer(NewHTTPHandler(NewResponder(cfg, os.DirFS(repoRoot))))
+	t.Cleanup(server.Close)
+
+	var firstBody string
+	for i, routePath := range EmailAutoconfigPaths() {
+		resp, err := http.Get(server.URL + routePath)
+		if err != nil {
+			t.Fatalf("get route: %v", err)
+		}
+		t.Cleanup(func() {
+			_ = resp.Body.Close()
+		})
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+		}
+		if got := resp.Header.Get("Content-Type"); got != "application/xml" {
+			t.Fatalf("content type = %q, want application/xml", got)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("read response body: %v", err)
+		}
+		if i == 0 {
+			firstBody = string(body)
+			continue
+		}
+		if string(body) != firstBody {
+			t.Fatalf("body mismatch for %s", routePath)
+		}
+	}
+}
+
 func findRepoRoot(t *testing.T) string {
 	t.Helper()
 

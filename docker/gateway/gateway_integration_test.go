@@ -90,8 +90,8 @@ func runGateway(t *testing.T, ctx context.Context, repoRoot, image, network, bac
 		"--name", name,
 		"--network", network,
 		"-p", "127.0.0.1::80",
-		"-v", filepath.Join(repoRoot, "examples/legacy-email/overlay.json") + ":/etc/wellknown-overlay/overlay.json:ro",
-		"-v", filepath.Join(repoRoot, "examples/legacy-email/public") + ":/var/lib/wellknown-overlay/public:ro",
+		"-v", filepath.Join(repoRoot, "examples/email-autoconfig/overlay.json") + ":/etc/wellknown-overlay/overlay.json:ro",
+		"-v", t.TempDir() + ":/var/lib/wellknown-overlay/public:ro",
 	}
 	if backendURL != "" {
 		args = append(args, "-e", "BACKEND_URL="+backendURL)

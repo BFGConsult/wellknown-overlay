@@ -61,7 +61,7 @@ func validate(args []string, stdout io.Writer) error {
 		return err
 	}
 
-	fmt.Fprintf(stdout, "ok: %d route(s)\n", len(cfg.Routes))
+	fmt.Fprintf(stdout, "ok: %d route(s), %d module route(s)\n", len(cfg.Routes), len(cfg.ModulePaths()))
 	return nil
 }
 

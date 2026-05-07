@@ -3,6 +3,7 @@ package overlay
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -46,5 +47,50 @@ func TestResponderRejectsUndeclaredRoute(t *testing.T) {
 	_, err := responder.Render("/other")
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestResponderRendersEmailAutoconfigRoutes(t *testing.T) {
+	responder := NewResponder(Config{
+		EmailAutoconfig: testEmailAutoconfig(),
+	}, fstest.MapFS{})
+
+	wellKnownResponse, err := responder.Render(EmailAutoconfigWellKnownPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyResponse, err := responder.Render(EmailAutoconfigLegacyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if wellKnownResponse.Status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", wellKnownResponse.Status, http.StatusOK)
+	}
+	if wellKnownResponse.ContentType != "application/xml" {
+		t.Fatalf("content type = %q, want application/xml", wellKnownResponse.ContentType)
+	}
+	if string(wellKnownResponse.Body) != string(legacyResponse.Body) {
+		t.Fatal("email autoconfig routes served different bodies")
+	}
+
+	body := string(wellKnownResponse.Body)
+	wantSubstrings := []string{
+		`<emailProvider id="efn.no">`,
+		"<domain>efn.no</domain>",
+		"<displayName>EFN</displayName>",
+		`<incomingServer type="imap">`,
+		"<hostname>login.kristshell.net</hostname>",
+		"<port>993</port>",
+		"<socketType>SSL</socketType>",
+		`<outgoingServer type="smtp">`,
+		"<port>587</port>",
+		"<socketType>STARTTLS</socketType>",
+		"<username>%EMAILADDRESS%</username>",
+	}
+	for _, want := range wantSubstrings {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body does not contain %q:\n%s", want, body)
+		}
 	}
 }

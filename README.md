@@ -24,10 +24,9 @@ request
       all other routes    -> existing app
 ```
 
-The initial implementation supports static route overlays. The intended next
-step is to add first-class modules:
+The initial implementation supports static route overlays and an email
+autoconfig module. Future first-class modules may include:
 
-- email autoconfig
 - OpenPGP WKD
 - `security.txt`
 - MTA-STS
@@ -55,6 +54,45 @@ Example:
 ```
 
 Route paths must be absolute and are matched exactly.
+
+### Email Autoconfig
+
+The `email_autoconfig` module renders Thunderbird-compatible autoconfiguration
+XML from one structured source of truth:
+
+```json
+{
+  "email_autoconfig": {
+    "domain": "efn.no",
+    "display_name": "EFN",
+    "incoming": {
+      "type": "imap",
+      "hostname": "login.kristshell.net",
+      "port": 993,
+      "socket_type": "SSL",
+      "authentication": "password-cleartext",
+      "username": "%EMAILADDRESS%"
+    },
+    "outgoing": {
+      "type": "smtp",
+      "hostname": "login.kristshell.net",
+      "port": 587,
+      "socket_type": "STARTTLS",
+      "authentication": "password-cleartext",
+      "username": "%EMAILADDRESS%"
+    }
+  }
+}
+```
+
+When enabled, the module owns these exact routes:
+
+- `/.well-known/autoconfig/mail/config-v1.1.xml`
+- `/mail/config-v1.1.xml`
+
+The gateway can also serve `/mail/config-v1.1.xml` for
+`autoconfig.example.org` when DNS and proxy hostnames point that subdomain at
+the gateway.
 
 ## Usage
 
@@ -151,5 +189,5 @@ Run the gateway integration checks with Docker:
 WELLKNOWN_OVERLAY_INTEGRATION=1 go test ./docker/gateway -run TestGatewayIntegration -count=1 -v
 ```
 
-The check builds the gateway image, starts it with the legacy email fixture, and
-verifies health, overlay routes, placeholder fallback, and backend proxying.
+The check builds the gateway image, starts it with the email autoconfig example,
+and verifies health, overlay routes, placeholder fallback, and backend proxying.
