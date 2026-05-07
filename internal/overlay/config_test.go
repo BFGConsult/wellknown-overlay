@@ -53,8 +53,7 @@ func TestConfigValidateRejectsMailAccountStaticRouteConflict(t *testing.T) {
 func TestConfigValidateRejectsIncompleteMailAccount(t *testing.T) {
 	cfg := Config{
 		MailAccount: &MailAccount{
-			Domain:      "example.org",
-			DisplayName: "Example Mail",
+			Profiles: []MailAccountProfile{{Match: "default"}},
 		},
 	}
 
@@ -63,10 +62,49 @@ func TestConfigValidateRejectsIncompleteMailAccount(t *testing.T) {
 	}
 }
 
+func TestConfigValidateRejectsMailAccountWithoutDefaultProfile(t *testing.T) {
+	account := testMailAccount()
+	account.Profiles[0].Match = "*@efn.no"
+
+	cfg := Config{MailAccount: account}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected missing default profile to be rejected")
+	}
+}
+
+func TestConfigValidateRejectsInvalidProfileMatch(t *testing.T) {
+	account := testMailAccount()
+	account.Profiles[0].Match = "efn.no"
+
+	cfg := Config{MailAccount: account}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected invalid profile match to be rejected")
+	}
+}
+
+func TestConfigValidateRejectsUnsupportedProfileGlobSyntax(t *testing.T) {
+	account := testMailAccount()
+	account.Profiles[0].Match = "[ab]@efn.no"
+
+	cfg := Config{MailAccount: account}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected unsupported profile glob syntax to be rejected")
+	}
+}
+
 func testMailAccount() *MailAccount {
 	return &MailAccount{
+		Profiles: []MailAccountProfile{
+			testMailAccountProfile("default", "EFN"),
+		},
+	}
+}
+
+func testMailAccountProfile(match, displayName string) MailAccountProfile {
+	return MailAccountProfile{
+		Match:       match,
 		Domain:      "efn.no",
-		DisplayName: "EFN",
+		DisplayName: displayName,
 		Incoming: EmailServerConfig{
 			Type:           "imap",
 			Hostname:       "login.kristshell.net",

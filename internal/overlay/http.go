@@ -25,7 +25,7 @@ func NewHTTPHandler(responder *Responder) http.Handler {
 			return
 		}
 
-		response, err := responder.RenderRequest(r.URL.Path, r.URL.Query())
+		response, err := responder.RenderRequest(r.URL.Path, r.URL.RawQuery)
 		if errors.Is(err, ErrNotFound) {
 			http.NotFound(w, r)
 			return

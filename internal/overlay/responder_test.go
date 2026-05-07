@@ -100,9 +100,7 @@ func TestResponderRendersAppleMobileconfigRoute(t *testing.T) {
 		MailAccount: testMailAccount(),
 	}, fstest.MapFS{})
 
-	response, err := responder.RenderRequest(AppleMobileconfigPath, map[string][]string{
-		"emailaddress": {"bfg@efn.no"},
-	})
+	response, err := responder.RenderRequest(AppleMobileconfigPath, "emailaddress=bfg@efn.no")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,5 +114,29 @@ func TestResponderRendersAppleMobileconfigRoute(t *testing.T) {
 	body := string(response.Body)
 	if !strings.Contains(body, "<key>EmailAddress</key>") || !strings.Contains(body, "<string>bfg@efn.no</string>") {
 		t.Fatalf("mobileconfig does not contain substituted email address:\n%s", body)
+	}
+}
+
+func TestResponderSelectsMailAccountProfileFromEmailAddress(t *testing.T) {
+	account := MailAccount{Profiles: []MailAccountProfile{
+		testMailAccountProfile("*@efn.no", "EFN"),
+		testMailAccountProfile("*+help@efn.no", "Helpdesk"),
+		testMailAccountProfile("default", "Default"),
+	}}
+	account.Profiles[1].Incoming.Username = "help@efn.no"
+	account.Profiles[1].Outgoing.Username = "help@efn.no"
+
+	responder := NewResponder(Config{MailAccount: &account}, fstest.MapFS{})
+	response, err := responder.RenderRequest(ThunderbirdAutoconfigWellKnownPath, "emailaddress=person+help@efn.no")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := string(response.Body)
+	if !strings.Contains(body, "<displayName>Helpdesk</displayName>") {
+		t.Fatalf("body does not use selected profile:\n%s", body)
+	}
+	if !strings.Contains(body, "<username>help@efn.no</username>") {
+		t.Fatalf("body does not use selected profile username:\n%s", body)
 	}
 }

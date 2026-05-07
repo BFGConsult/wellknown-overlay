@@ -64,27 +64,60 @@ truth:
 ```json
 {
   "mail_account": {
-    "domain": "efn.no",
-    "display_name": "EFN",
-    "incoming": {
-      "type": "imap",
-      "hostname": "login.kristshell.net",
-      "port": 993,
-      "socket_type": "SSL",
-      "authentication": "password-cleartext",
-      "username": "%EMAILADDRESS%"
-    },
-    "outgoing": {
-      "type": "smtp",
-      "hostname": "login.kristshell.net",
-      "port": 587,
-      "socket_type": "STARTTLS",
-      "authentication": "password-cleartext",
-      "username": "%EMAILADDRESS%"
-    }
+    "profiles": [
+      {
+        "match": "*+bfg@efn.no",
+        "domain": "efn.no",
+        "display_name": "EFN",
+        "incoming": {
+          "type": "imap",
+          "hostname": "login.kristshell.net",
+          "port": 993,
+          "socket_type": "SSL",
+          "authentication": "password-cleartext",
+          "username": "bfg@efn.no"
+        },
+        "outgoing": {
+          "type": "smtp",
+          "hostname": "login.kristshell.net",
+          "port": 587,
+          "socket_type": "STARTTLS",
+          "authentication": "password-cleartext",
+          "username": "bfg@efn.no"
+        }
+      },
+      {
+        "match": "default",
+        "domain": "efn.no",
+        "display_name": "EFN",
+        "incoming": {
+          "type": "imap",
+          "hostname": "login.kristshell.net",
+          "port": 993,
+          "socket_type": "SSL",
+          "authentication": "password-cleartext",
+          "username": "%EMAILADDRESS%"
+        },
+        "outgoing": {
+          "type": "smtp",
+          "hostname": "login.kristshell.net",
+          "port": 587,
+          "socket_type": "STARTTLS",
+          "authentication": "password-cleartext",
+          "username": "%EMAILADDRESS%"
+        }
+      }
+    ]
   }
 }
 ```
+
+Profile matching uses the request's `emailaddress` query parameter. The profile
+with `match: "default"` is required and is used when no other profile matches.
+All other `match` values are case-insensitive glob patterns against the full
+email address; `*` matches any sequence and `?` matches one character. More
+literal characters beat fewer literal characters, fewer wildcards break that
+tie, and config order breaks any remaining tie.
 
 When enabled, the module owns these exact Thunderbird routes:
 

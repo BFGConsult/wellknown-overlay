@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func RenderAppleMobileconfig(cfg MailAccount, emailAddress string) ([]byte, error) {
+func RenderAppleMobileconfig(cfg MailAccountProfile, emailAddress string) ([]byte, error) {
 	username := substituteMailVariables(cfg.Incoming.Username, emailAddress)
 	outgoingUsername := substituteMailVariables(cfg.Outgoing.Username, emailAddress)
 

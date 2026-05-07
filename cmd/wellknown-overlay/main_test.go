@@ -37,24 +37,29 @@ func TestValidateCommandReportsModuleRoutes(t *testing.T) {
 	configPath := filepath.Join(dir, "overlay.json")
 	if err := os.WriteFile(configPath, []byte(`{
   "mail_account": {
-    "domain": "example.org",
-    "display_name": "Example Mail",
-    "incoming": {
-      "type": "imap",
-      "hostname": "mail.example.org",
-      "port": 993,
-      "socket_type": "SSL",
-      "authentication": "password-cleartext",
-      "username": "%EMAILADDRESS%"
-    },
-    "outgoing": {
-      "type": "smtp",
-      "hostname": "mail.example.org",
-      "port": 587,
-      "socket_type": "STARTTLS",
-      "authentication": "password-cleartext",
-      "username": "%EMAILADDRESS%"
-    }
+    "profiles": [
+      {
+        "match": "default",
+        "domain": "example.org",
+        "display_name": "Example Mail",
+        "incoming": {
+          "type": "imap",
+          "hostname": "mail.example.org",
+          "port": 993,
+          "socket_type": "SSL",
+          "authentication": "password-cleartext",
+          "username": "%EMAILADDRESS%"
+        },
+        "outgoing": {
+          "type": "smtp",
+          "hostname": "mail.example.org",
+          "port": 587,
+          "socket_type": "STARTTLS",
+          "authentication": "password-cleartext",
+          "username": "%EMAILADDRESS%"
+        }
+      }
+    ]
   }
 }`), 0o644); err != nil {
 		t.Fatal(err)
@@ -75,24 +80,29 @@ func TestRenderCommandPassesQueryString(t *testing.T) {
 	configPath := filepath.Join(dir, "overlay.json")
 	if err := os.WriteFile(configPath, []byte(`{
   "mail_account": {
-    "domain": "example.org",
-    "display_name": "Example Mail",
-    "incoming": {
-      "type": "imap",
-      "hostname": "mail.example.org",
-      "port": 993,
-      "socket_type": "SSL",
-      "authentication": "password-cleartext",
-      "username": "%EMAILADDRESS%"
-    },
-    "outgoing": {
-      "type": "smtp",
-      "hostname": "mail.example.org",
-      "port": 587,
-      "socket_type": "STARTTLS",
-      "authentication": "password-cleartext",
-      "username": "%EMAILADDRESS%"
-    }
+    "profiles": [
+      {
+        "match": "default",
+        "domain": "example.org",
+        "display_name": "Example Mail",
+        "incoming": {
+          "type": "imap",
+          "hostname": "mail.example.org",
+          "port": 993,
+          "socket_type": "SSL",
+          "authentication": "password-cleartext",
+          "username": "%EMAILADDRESS%"
+        },
+        "outgoing": {
+          "type": "smtp",
+          "hostname": "mail.example.org",
+          "port": 587,
+          "socket_type": "STARTTLS",
+          "authentication": "password-cleartext",
+          "username": "%EMAILADDRESS%"
+        }
+      }
+    ]
   }
 }`), 0o644); err != nil {
 		t.Fatal(err)

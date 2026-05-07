@@ -21,6 +21,11 @@ type Route struct {
 }
 
 type MailAccount struct {
+	Profiles []MailAccountProfile `json:"profiles"`
+}
+
+type MailAccountProfile struct {
+	Match            string            `json:"match"`
 	Domain           string            `json:"domain"`
 	DisplayName      string            `json:"display_name"`
 	DisplayShortName string            `json:"display_short_name,omitempty"`
@@ -111,16 +116,62 @@ func (cfg Config) ModulePaths() []string {
 }
 
 func (cfg MailAccount) Validate() error {
+	if len(cfg.Profiles) == 0 {
+		return errors.New("mail_account.profiles must declare at least one profile")
+	}
+
+	seen := make(map[string]struct{}, len(cfg.Profiles))
+	defaultCount := 0
+	for i, profile := range cfg.Profiles {
+		prefix := fmt.Sprintf("mail_account.profiles[%d]", i)
+		match := strings.ToLower(profile.Match)
+		if profile.Match == "" {
+			return fmt.Errorf("%s.match is required", prefix)
+		}
+		if _, ok := seen[match]; ok {
+			return fmt.Errorf("duplicate mail account profile match %q", profile.Match)
+		}
+		seen[match] = struct{}{}
+
+		if match == defaultProfileMatch {
+			defaultCount++
+		} else {
+			if strings.Contains(match, "/") {
+				return fmt.Errorf("%s.match must not contain /", prefix)
+			}
+			if strings.ContainsAny(match, "[]\\") {
+				return fmt.Errorf("%s.match only supports * and ? wildcards", prefix)
+			}
+			if !strings.Contains(match, "@") {
+				return fmt.Errorf("%s.match must match an email address", prefix)
+			}
+			if _, err := path.Match(match, "user@example.org"); err != nil {
+				return fmt.Errorf("%s.match is invalid: %w", prefix, err)
+			}
+		}
+
+		if err := profile.Validate(prefix); err != nil {
+			return err
+		}
+	}
+	if defaultCount != 1 {
+		return errors.New("mail_account.profiles must declare exactly one default profile")
+	}
+
+	return nil
+}
+
+func (cfg MailAccountProfile) Validate(prefix string) error {
 	if cfg.Domain == "" {
-		return errors.New("mail_account.domain is required")
+		return fmt.Errorf("%s.domain is required", prefix)
 	}
 	if cfg.DisplayName == "" {
-		return errors.New("mail_account.display_name is required")
+		return fmt.Errorf("%s.display_name is required", prefix)
 	}
-	if err := cfg.Incoming.Validate("mail_account.incoming"); err != nil {
+	if err := cfg.Incoming.Validate(prefix + ".incoming"); err != nil {
 		return err
 	}
-	if err := cfg.Outgoing.Validate("mail_account.outgoing"); err != nil {
+	if err := cfg.Outgoing.Validate(prefix + ".outgoing"); err != nil {
 		return err
 	}
 	return nil

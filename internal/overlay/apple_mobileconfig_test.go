@@ -6,7 +6,7 @@ import (
 )
 
 func TestRenderAppleMobileconfigUsesMailAccountSettings(t *testing.T) {
-	body, err := RenderAppleMobileconfig(*testMailAccount(), "bfg@efn.no")
+	body, err := RenderAppleMobileconfig(testMailAccount().SelectProfile("bfg@efn.no"), "bfg@efn.no")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestRenderAppleMobileconfigUsesMailAccountSettings(t *testing.T) {
 }
 
 func TestRenderAppleMobileconfigEscapesXML(t *testing.T) {
-	cfg := *testMailAccount()
+	cfg := testMailAccount().SelectProfile("person+test@efn.no")
 	cfg.DisplayName = "A&B <Mail>"
 
 	body, err := RenderAppleMobileconfig(cfg, "person+test@efn.no")

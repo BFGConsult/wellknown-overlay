@@ -133,7 +133,7 @@ func render(args []string, stdout io.Writer) error {
 		return err
 	}
 
-	response, err := responder.RenderRequest(parsedPath.Path, parsedPath.Query())
+	response, err := responder.RenderRequest(parsedPath.Path, parsedPath.RawQuery)
 	if err != nil {
 		return err
 	}

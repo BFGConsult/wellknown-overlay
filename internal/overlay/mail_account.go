@@ -3,12 +3,15 @@ package overlay
 import (
 	"encoding/xml"
 	"fmt"
+	"path"
+	"strings"
 )
 
 const (
 	ThunderbirdAutoconfigWellKnownPath = "/.well-known/autoconfig/mail/config-v1.1.xml"
 	ThunderbirdAutoconfigLegacyPath    = "/mail/config-v1.1.xml"
 	AppleMobileconfigPath              = "/.well-known/mail/apple.mobileconfig"
+	defaultProfileMatch                = "default"
 )
 
 func MailAccountPaths() []string {
@@ -23,7 +26,74 @@ func ThunderbirdAutoconfigPaths() []string {
 	}
 }
 
-func RenderThunderbirdAutoconfig(cfg MailAccount) ([]byte, error) {
+func (cfg MailAccount) SelectProfile(emailAddress string) MailAccountProfile {
+	normalizedEmail := strings.ToLower(emailAddress)
+	var defaultProfile MailAccountProfile
+	var bestProfile MailAccountProfile
+	var bestScore profileMatchScore
+	hasBest := false
+
+	for index, profile := range cfg.Profiles {
+		match := strings.ToLower(profile.Match)
+		if match == defaultProfileMatch {
+			defaultProfile = profile
+			continue
+		}
+		if normalizedEmail == "" {
+			continue
+		}
+		matched, err := path.Match(match, normalizedEmail)
+		if err != nil || !matched {
+			continue
+		}
+
+		score := newProfileMatchScore(match, index)
+		if !hasBest || score.betterThan(bestScore) {
+			bestProfile = profile
+			bestScore = score
+			hasBest = true
+		}
+	}
+
+	if hasBest {
+		return bestProfile
+	}
+	return defaultProfile
+}
+
+type profileMatchScore struct {
+	literalCount  int
+	wildcardCount int
+	index         int
+}
+
+func newProfileMatchScore(pattern string, index int) profileMatchScore {
+	score := profileMatchScore{index: index}
+	for _, ch := range pattern {
+		switch ch {
+		case '*', '?':
+			score.wildcardCount++
+		default:
+			score.literalCount++
+		}
+	}
+	return score
+}
+
+func (score profileMatchScore) betterThan(other profileMatchScore) bool {
+	if score.literalCount != other.literalCount {
+		return score.literalCount > other.literalCount
+	}
+	if score.wildcardCount != other.wildcardCount {
+		return score.wildcardCount < other.wildcardCount
+	}
+	return score.index < other.index
+}
+
+func RenderThunderbirdAutoconfig(cfg MailAccountProfile, emailAddress string) ([]byte, error) {
+	cfg.Incoming.Username = substituteMailVariables(cfg.Incoming.Username, emailAddress)
+	cfg.Outgoing.Username = substituteMailVariables(cfg.Outgoing.Username, emailAddress)
+
 	shortName := cfg.DisplayShortName
 	if shortName == "" {
 		shortName = cfg.DisplayName

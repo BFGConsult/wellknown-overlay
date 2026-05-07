@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 )
 
 var ErrNotFound = errors.New("route not found")
@@ -37,12 +38,14 @@ func NewResponder(cfg Config, files fs.FS) *Responder {
 }
 
 func (r *Responder) Render(routePath string) (Response, error) {
-	return r.RenderRequest(routePath, nil)
+	return r.RenderRequest(routePath, "")
 }
 
-func (r *Responder) RenderRequest(routePath string, query url.Values) (Response, error) {
+func (r *Responder) RenderRequest(routePath, rawQuery string) (Response, error) {
 	if r.mailAccount != nil && isThunderbirdAutoconfigPath(routePath) {
-		body, err := RenderThunderbirdAutoconfig(*r.mailAccount)
+		emailAddress := queryValue(rawQuery, "emailaddress")
+		profile := r.mailAccount.SelectProfile(emailAddress)
+		body, err := RenderThunderbirdAutoconfig(profile, emailAddress)
 		if err != nil {
 			return Response{}, err
 		}
@@ -53,7 +56,9 @@ func (r *Responder) RenderRequest(routePath string, query url.Values) (Response,
 		}, nil
 	}
 	if r.mailAccount != nil && routePath == AppleMobileconfigPath {
-		body, err := RenderAppleMobileconfig(*r.mailAccount, query.Get("emailaddress"))
+		emailAddress := queryValue(rawQuery, "emailaddress")
+		profile := r.mailAccount.SelectProfile(emailAddress)
+		body, err := RenderAppleMobileconfig(profile, emailAddress)
 		if err != nil {
 			return Response{}, err
 		}
@@ -96,4 +101,19 @@ func isThunderbirdAutoconfigPath(routePath string) bool {
 		}
 	}
 	return false
+}
+
+func queryValue(rawQuery, key string) string {
+	for _, part := range strings.Split(rawQuery, "&") {
+		name, value, ok := strings.Cut(part, "=")
+		if !ok || name != key {
+			continue
+		}
+		unescaped, err := url.PathUnescape(value)
+		if err != nil {
+			return value
+		}
+		return unescaped
+	}
+	return ""
 }
