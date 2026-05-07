@@ -56,7 +56,7 @@ func TestGatewayIntegration(t *testing.T) {
 		assertPOST(t, baseURL+"/autodiscover/autodiscover.xml", autodiscoverRequest("person+help@example.org"), http.StatusOK, "<LoginName>person+help@example.org</LoginName>")
 
 		assertGET(t, baseURL+"/.well-known/openpgpkey/example", http.StatusNotFound, "")
-		assertGET(t, baseURL+"/", http.StatusOK, "standards-path overlay is running")
+		assertGET(t, baseURL+"/", http.StatusOK, "wellknown-overlay is running")
 	})
 
 	t.Run("with backend", func(t *testing.T) {
@@ -84,9 +84,44 @@ func TestGatewayIntegration(t *testing.T) {
 		assertGET(t, baseURL+"/.well-known/mail/apple.mobileconfig?emailaddress=alice@example.org", http.StatusOK, "com.apple.mail.managed")
 		assertPOST(t, baseURL+"/Autodiscover/Autodiscover.xml", autodiscoverRequest("alice@example.org"), http.StatusOK, "<Autodiscover")
 	})
+
+	t.Run("host aware backend and overlay only", func(t *testing.T) {
+		backendName := fmt.Sprintf("wellknown-overlay-backend-%d", time.Now().UnixNano())
+		backendRoot := t.TempDir()
+		if err := os.WriteFile(filepath.Join(backendRoot, "index.html"), []byte("backend ok\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		runDocker(t, ctx, repoRoot, "run", "-d", "--name", backendName, "--network", network, "-v", backendRoot+":/usr/share/nginx/html:ro", "nginx:1.29-alpine")
+		t.Cleanup(func() {
+			cleanupDocker(t, context.Background(), "rm", "-f", backendName)
+		})
+
+		gatewayName := runGateway(
+			t,
+			ctx,
+			repoRoot,
+			image,
+			network,
+			"http://"+backendName,
+			"BACKEND_HOSTS=example.org",
+			"OVERLAY_ONLY_HOSTS=autoconfig.example.org,autodiscover.example.org",
+		)
+		t.Cleanup(func() {
+			cleanupDocker(t, context.Background(), "rm", "-f", gatewayName)
+		})
+
+		baseURL := gatewayBaseURL(t, ctx, repoRoot, gatewayName)
+		waitForHealth(t, baseURL)
+
+		assertGETHost(t, baseURL, "example.org", "/", http.StatusOK, "backend ok\n")
+		assertGETHost(t, baseURL, "autoconfig.example.org", "/", http.StatusOK, "wellknown-overlay is running")
+		assertGETHost(t, baseURL, "autoconfig.example.org", "/mail/config-v1.1.xml", http.StatusOK, "<clientConfig")
+		assertPOSTHost(t, baseURL, "autodiscover.example.org", "/Autodiscover/Autodiscover.xml", autodiscoverRequest("alice@example.org"), http.StatusOK, "<Autodiscover")
+		assertGETHost(t, baseURL, "stray.example.org", "/", http.StatusNotFound, "")
+	})
 }
 
-func runGateway(t *testing.T, ctx context.Context, repoRoot, image, network, backendURL string) string {
+func runGateway(t *testing.T, ctx context.Context, repoRoot, image, network, backendURL string, extraEnv ...string) string {
 	t.Helper()
 
 	name := fmt.Sprintf("wellknown-overlay-gateway-%d", time.Now().UnixNano())
@@ -103,6 +138,9 @@ func runGateway(t *testing.T, ctx context.Context, repoRoot, image, network, bac
 	}
 	if backendURL != "" {
 		args = append(args, "-e", "BACKEND_URL="+backendURL)
+	}
+	for _, env := range extraEnv {
+		args = append(args, "-e", env)
 	}
 	args = append(args, image)
 
@@ -155,44 +193,70 @@ func assertGET(t *testing.T, url string, wantStatus int, wantBodySubstring strin
 	t.Helper()
 
 	client := http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		t.Fatalf("GET %s: %v", url, err)
 	}
-	defer resp.Body.Close()
+	return doAssert(t, client, req, wantStatus, wantBodySubstring)
+}
 
-	body, err := io.ReadAll(resp.Body)
+func assertGETHost(t *testing.T, baseURL, host, path string, wantStatus int, wantBodySubstring string) string {
+	t.Helper()
+
+	client := http.Client{Timeout: 5 * time.Second}
+	url := baseURL + path
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		t.Fatalf("read %s: %v", url, err)
+		t.Fatalf("GET %s: %v", url, err)
 	}
-	if resp.StatusCode != wantStatus {
-		t.Fatalf("GET %s status = %d, want %d; body %q", url, resp.StatusCode, wantStatus, body)
-	}
-	if wantBodySubstring != "" && !strings.Contains(string(body), wantBodySubstring) {
-		t.Fatalf("GET %s body %q does not contain %q", url, body, wantBodySubstring)
-	}
-	return string(body)
+	req.Host = host
+	return doAssert(t, client, req, wantStatus, wantBodySubstring)
 }
 
 func assertPOST(t *testing.T, url, requestBody string, wantStatus int, wantBodySubstring string) string {
 	t.Helper()
 
 	client := http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Post(url, "text/xml", strings.NewReader(requestBody))
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(requestBody))
 	if err != nil {
 		t.Fatalf("POST %s: %v", url, err)
+	}
+	req.Header.Set("Content-Type", "text/xml")
+	return doAssert(t, client, req, wantStatus, wantBodySubstring)
+}
+
+func assertPOSTHost(t *testing.T, baseURL, host, path, requestBody string, wantStatus int, wantBodySubstring string) string {
+	t.Helper()
+
+	client := http.Client{Timeout: 5 * time.Second}
+	url := baseURL + path
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(requestBody))
+	if err != nil {
+		t.Fatalf("POST %s: %v", url, err)
+	}
+	req.Host = host
+	req.Header.Set("Content-Type", "text/xml")
+	return doAssert(t, client, req, wantStatus, wantBodySubstring)
+}
+
+func doAssert(t *testing.T, client http.Client, req *http.Request, wantStatus int, wantBodySubstring string) string {
+	t.Helper()
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("%s %s: %v", req.Method, req.URL, err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatalf("read %s: %v", url, err)
+		t.Fatalf("read %s: %v", req.URL, err)
 	}
 	if resp.StatusCode != wantStatus {
-		t.Fatalf("POST %s status = %d, want %d; body %q", url, resp.StatusCode, wantStatus, body)
+		t.Fatalf("%s %s host %q status = %d, want %d; body %q", req.Method, req.URL, req.Host, resp.StatusCode, wantStatus, body)
 	}
 	if wantBodySubstring != "" && !strings.Contains(string(body), wantBodySubstring) {
-		t.Fatalf("POST %s body %q does not contain %q", url, body, wantBodySubstring)
+		t.Fatalf("%s %s host %q body %q does not contain %q", req.Method, req.URL, req.Host, body, wantBodySubstring)
 	}
 	return string(body)
 }

@@ -273,7 +273,7 @@ standalone `wellknown-overlay` binary does not read these deployment variables.
 The optional gateway image is derived from nginx. It runs the overlay locally
 and proxies selected standards paths to it. If `BACKEND_URL` is set, every other
 path is proxied to that backend. If `BACKEND_URL` is unset, nginx serves a small
-placeholder page instead.
+static page explaining that the host is an automatic-configuration endpoint.
 
 ```sh
 docker build -f docker/gateway/Dockerfile -t wellknown-overlay-gateway .
@@ -285,6 +285,27 @@ docker run --rm -p 8080:80 \
   -e BACKEND_URL=http://app:3000 \
   wellknown-overlay-gateway
 ```
+
+For domains where the same gateway answers both the main website and
+autoconfiguration subdomains, set host lists:
+
+```sh
+docker run --rm -p 8080:80 \
+  -e MAIL_DOMAIN=example.org \
+  -e MAIL_INCOMING_HOST=mail.example.org \
+  -e MAIL_OUTGOING_HOST=mail.example.org \
+  -e BACKEND_URL=http://app:3000 \
+  -e BACKEND_HOSTS=example.org \
+  -e OVERLAY_ONLY_HOSTS=autoconfig.example.org,autodiscover.example.org \
+  wellknown-overlay-gateway
+```
+
+`BACKEND_HOSTS` use the backend fallback. `OVERLAY_ONLY_HOSTS` use the static
+fallback page. If either variable is set, the lists enumerate the known hosts;
+unmatched hosts return `404` except for `/healthz`. A literal `*` means the
+default for hosts not otherwise matched. Putting `*` in both lists, listing the
+same concrete host in both lists, or setting `BACKEND_HOSTS` without
+`BACKEND_URL` is a startup configuration error.
 
 The gateway currently routes these paths to the overlay:
 
@@ -306,4 +327,5 @@ WELLKNOWN_OVERLAY_INTEGRATION=1 go test ./docker/gateway -run TestGatewayIntegra
 ```
 
 The check builds the gateway image, starts it from `MAIL_*` variables, and
-verifies health, overlay routes, placeholder fallback, and backend proxying.
+verifies health, overlay routes, static fallback, backend proxying, and
+host-aware routing.
