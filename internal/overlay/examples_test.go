@@ -131,6 +131,20 @@ func TestMailAccountExampleServesModuleRoutes(t *testing.T) {
 			t.Fatalf("body mismatch for %s", routePath)
 		}
 	}
+
+	resp, err := http.Get(server.URL + AppleMobileconfigPath + "?emailaddress=alice@example.org")
+	if err != nil {
+		t.Fatalf("get apple mobileconfig route: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("apple mobileconfig status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if got := resp.Header.Get("Content-Type"); got != "application/x-apple-aspen-config" {
+		t.Fatalf("apple mobileconfig content type = %q, want application/x-apple-aspen-config", got)
+	}
 }
 
 func findRepoRoot(t *testing.T) string {

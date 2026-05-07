@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 )
 
@@ -36,6 +37,10 @@ func NewResponder(cfg Config, files fs.FS) *Responder {
 }
 
 func (r *Responder) Render(routePath string) (Response, error) {
+	return r.RenderRequest(routePath, nil)
+}
+
+func (r *Responder) RenderRequest(routePath string, query url.Values) (Response, error) {
 	if r.mailAccount != nil && isThunderbirdAutoconfigPath(routePath) {
 		body, err := RenderThunderbirdAutoconfig(*r.mailAccount)
 		if err != nil {
@@ -44,6 +49,17 @@ func (r *Responder) Render(routePath string) (Response, error) {
 		return Response{
 			Status:      http.StatusOK,
 			ContentType: "application/xml",
+			Body:        body,
+		}, nil
+	}
+	if r.mailAccount != nil && routePath == AppleMobileconfigPath {
+		body, err := RenderAppleMobileconfig(*r.mailAccount, query.Get("emailaddress"))
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{
+			Status:      http.StatusOK,
+			ContentType: "application/x-apple-aspen-config",
 			Body:        body,
 		}, nil
 	}

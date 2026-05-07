@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -127,7 +128,12 @@ func render(args []string, stdout io.Writer) error {
 		return err
 	}
 
-	response, err := responder.Render(*routePath)
+	parsedPath, err := url.ParseRequestURI(*routePath)
+	if err != nil {
+		return err
+	}
+
+	response, err := responder.RenderRequest(parsedPath.Path, parsedPath.Query())
 	if err != nil {
 		return err
 	}

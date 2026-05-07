@@ -24,6 +24,10 @@ server {
         proxy_pass ${OVERLAY_UPSTREAM};
     }
 
+    location = /.well-known/mail/apple.mobileconfig {
+        proxy_pass ${OVERLAY_UPSTREAM};
+    }
+
     location = /.well-known/security.txt {
         proxy_pass ${OVERLAY_UPSTREAM};
     }

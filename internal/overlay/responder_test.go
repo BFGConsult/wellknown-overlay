@@ -94,3 +94,27 @@ func TestResponderRendersMailAccountRoutes(t *testing.T) {
 		}
 	}
 }
+
+func TestResponderRendersAppleMobileconfigRoute(t *testing.T) {
+	responder := NewResponder(Config{
+		MailAccount: testMailAccount(),
+	}, fstest.MapFS{})
+
+	response, err := responder.RenderRequest(AppleMobileconfigPath, map[string][]string{
+		"emailaddress": {"bfg@efn.no"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if response.Status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Status, http.StatusOK)
+	}
+	if response.ContentType != "application/x-apple-aspen-config" {
+		t.Fatalf("content type = %q, want application/x-apple-aspen-config", response.ContentType)
+	}
+	body := string(response.Body)
+	if !strings.Contains(body, "<key>EmailAddress</key>") || !strings.Contains(body, "<string>bfg@efn.no</string>") {
+		t.Fatalf("mobileconfig does not contain substituted email address:\n%s", body)
+	}
+}

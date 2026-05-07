@@ -51,6 +51,7 @@ func TestGatewayIntegration(t *testing.T) {
 		if modernBody != legacyBody {
 			t.Fatal("legacy email routes served different bodies")
 		}
+		assertGET(t, baseURL+"/.well-known/mail/apple.mobileconfig?emailaddress=alice@example.org", http.StatusOK, "com.apple.mail.managed")
 
 		assertGET(t, baseURL+"/.well-known/openpgpkey/example", http.StatusNotFound, "")
 		assertGET(t, baseURL+"/", http.StatusOK, "standards-path overlay is running")
@@ -78,6 +79,7 @@ func TestGatewayIntegration(t *testing.T) {
 		assertGET(t, baseURL+"/", http.StatusOK, "backend ok\n")
 		assertGET(t, baseURL+"/healthz", http.StatusOK, "ok\n")
 		assertGET(t, baseURL+"/mail/config-v1.1.xml", http.StatusOK, "<clientConfig")
+		assertGET(t, baseURL+"/.well-known/mail/apple.mobileconfig?emailaddress=alice@example.org", http.StatusOK, "com.apple.mail.managed")
 	})
 }
 

@@ -58,8 +58,8 @@ Route paths must be absolute and are matched exactly.
 ### Mail Account
 
 The `mail_account` module describes one mail account setup as structured data.
-The current renderer serves Thunderbird-compatible autoconfiguration XML from
-that source of truth:
+Renderers serve client-specific configuration formats from that source of
+truth:
 
 ```json
 {
@@ -86,7 +86,7 @@ that source of truth:
 }
 ```
 
-When enabled, the module owns these exact routes:
+When enabled, the module owns these exact Thunderbird routes:
 
 - `/.well-known/autoconfig/mail/config-v1.1.xml`
 - `/mail/config-v1.1.xml`
@@ -94,6 +94,17 @@ When enabled, the module owns these exact routes:
 The gateway can also serve `/mail/config-v1.1.xml` for
 `autoconfig.example.org` when DNS and proxy hostnames point that subdomain at
 the gateway.
+
+The module also serves an unsigned Apple configuration profile:
+
+- `/.well-known/mail/apple.mobileconfig`
+
+Apple profiles should normally be requested with an email address so
+placeholders such as `%EMAILADDRESS%` can be filled:
+
+```text
+/.well-known/mail/apple.mobileconfig?emailaddress=user@example.org
+```
 
 ## Usage
 
@@ -179,6 +190,7 @@ The gateway currently routes these paths to the overlay:
 - `/healthz`
 - `/.well-known/autoconfig/`
 - `/.well-known/openpgpkey/`
+- `/.well-known/mail/apple.mobileconfig`
 - `/.well-known/security.txt`
 - `/.well-known/mta-sts.txt`
 - `/mail/config-v1.1.xml`

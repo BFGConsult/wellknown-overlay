@@ -8,7 +8,13 @@ import (
 const (
 	ThunderbirdAutoconfigWellKnownPath = "/.well-known/autoconfig/mail/config-v1.1.xml"
 	ThunderbirdAutoconfigLegacyPath    = "/mail/config-v1.1.xml"
+	AppleMobileconfigPath              = "/.well-known/mail/apple.mobileconfig"
 )
+
+func MailAccountPaths() []string {
+	paths := ThunderbirdAutoconfigPaths()
+	return append(paths, AppleMobileconfigPath)
+}
 
 func ThunderbirdAutoconfigPaths() []string {
 	return []string{

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -64,7 +65,54 @@ func TestValidateCommandReportsModuleRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, want := stdout.String(), "ok: 0 route(s), 2 module route(s)\n"; got != want {
+	if got, want := stdout.String(), "ok: 0 route(s), 3 module route(s)\n"; got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
+func TestRenderCommandPassesQueryString(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "overlay.json")
+	if err := os.WriteFile(configPath, []byte(`{
+  "mail_account": {
+    "domain": "example.org",
+    "display_name": "Example Mail",
+    "incoming": {
+      "type": "imap",
+      "hostname": "mail.example.org",
+      "port": 993,
+      "socket_type": "SSL",
+      "authentication": "password-cleartext",
+      "username": "%EMAILADDRESS%"
+    },
+    "outgoing": {
+      "type": "smtp",
+      "hostname": "mail.example.org",
+      "port": 587,
+      "socket_type": "STARTTLS",
+      "authentication": "password-cleartext",
+      "username": "%EMAILADDRESS%"
+    }
+  }
+}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	err := render([]string{
+		"-config", configPath,
+		"-root", dir,
+		"-path", "/.well-known/mail/apple.mobileconfig?emailaddress=alice@example.org",
+	}, &stdout)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := io.ReadAll(&stdout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(body, []byte("<string>alice@example.org</string>")) {
+		t.Fatalf("render output does not contain substituted email address:\n%s", body)
 	}
 }

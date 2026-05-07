@@ -88,7 +88,7 @@ func (cfg Config) Validate() error {
 	}
 
 	if cfg.MailAccount != nil {
-		for _, modulePath := range ThunderbirdAutoconfigPaths() {
+		for _, modulePath := range MailAccountPaths() {
 			if _, ok := seen[modulePath]; ok {
 				return fmt.Errorf("mail_account route conflicts with static route %q", modulePath)
 			}
@@ -105,7 +105,7 @@ func (cfg Config) Validate() error {
 func (cfg Config) ModulePaths() []string {
 	var paths []string
 	if cfg.MailAccount != nil {
-		paths = append(paths, ThunderbirdAutoconfigPaths()...)
+		paths = append(paths, MailAccountPaths()...)
 	}
 	return paths
 }
