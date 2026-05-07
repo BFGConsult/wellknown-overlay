@@ -6,10 +6,12 @@ COPY cmd ./cmd
 COPY internal ./internal
 
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/wellknown-overlay ./cmd/wellknown-overlay
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/wellknown-overlay-docker-entrypoint ./cmd/wellknown-overlay-docker-entrypoint
 
 FROM nginx:1.29-alpine
 
 COPY --from=build /out/wellknown-overlay /usr/local/bin/wellknown-overlay
+COPY --from=build /out/wellknown-overlay-docker-entrypoint /usr/local/bin/wellknown-overlay-docker-entrypoint
 COPY docker/gateway/entrypoint.sh /usr/local/bin/wellknown-overlay-gateway
 COPY docker/gateway/placeholder /usr/share/wellknown-overlay/placeholder
 

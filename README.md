@@ -204,16 +204,53 @@ that is convenient. The overlay itself still refuses undeclared paths.
 
 ## Docker
 
-The root `Dockerfile` builds the minimal overlay image. It runs only the Go
-binary and expects a config file plus a public file tree to be mounted in:
+The root `Dockerfile` builds the minimal overlay image. It includes the
+standalone `wellknown-overlay` binary plus a small Docker entrypoint helper.
+For the common mail-account case, the helper can generate `overlay.json` from
+environment variables at startup:
 
 ```sh
 docker build -t wellknown-overlay .
+docker run --rm -p 8765:8765 \
+  -e MAIL_DOMAIN=example.org \
+  -e MAIL_DISPLAY_NAME="Example Mail" \
+  -e MAIL_INCOMING_HOST=mail.example.org \
+  -e MAIL_OUTGOING_HOST=mail.example.org \
+  wellknown-overlay
+```
+
+If `/etc/wellknown-overlay/overlay.json` already exists, it is treated as a
+complete user-provided config and `MAIL_*` variables are ignored with a warning.
+Mount `overlay.json` when you need static routes, multiple profiles, or other
+advanced config:
+
+```sh
 docker run --rm -p 8765:8765 \
   -v "$PWD/examples/overlay.json:/etc/wellknown-overlay/overlay.json:ro" \
   -v "$PWD/examples/public:/var/lib/wellknown-overlay/public:ro" \
   wellknown-overlay
 ```
+
+Common `MAIL_*` variables:
+
+- `MAIL_DOMAIN` is required when generating config.
+- `MAIL_DISPLAY_NAME` defaults to `MAIL_DOMAIN`.
+- `MAIL_DISPLAY_SHORT_NAME` is optional.
+- `MAIL_INCOMING_HOST` and `MAIL_OUTGOING_HOST` are required.
+- `MAIL_INCOMING_TYPE` defaults to `imap`; `MAIL_OUTGOING_TYPE` defaults to
+  `smtp`.
+- `MAIL_INCOMING_PORT` defaults to `993`; `MAIL_OUTGOING_PORT` defaults to
+  `587`.
+- `MAIL_INCOMING_SOCKET_TYPE` defaults to `SSL`;
+  `MAIL_OUTGOING_SOCKET_TYPE` defaults to `STARTTLS`.
+- `MAIL_INCOMING_AUTHENTICATION` and `MAIL_OUTGOING_AUTHENTICATION` default to
+  `password-cleartext`.
+- `MAIL_USERNAME` defaults to `%EMAILADDRESS%` and is used for both directions
+  unless `MAIL_INCOMING_USERNAME` or `MAIL_OUTGOING_USERNAME` are set.
+
+If gateway-only variables such as `BACKEND_URL` are set on the core image, the
+Docker entrypoint helper warns that they only affect the gateway image. The
+standalone `wellknown-overlay` binary does not read these deployment variables.
 
 The optional gateway image is derived from nginx. It runs the overlay locally
 and proxies selected standards paths to it. If `BACKEND_URL` is set, every other
@@ -223,9 +260,11 @@ placeholder page instead.
 ```sh
 docker build -f docker/gateway/Dockerfile -t wellknown-overlay-gateway .
 docker run --rm -p 8080:80 \
+  -e MAIL_DOMAIN=example.org \
+  -e MAIL_DISPLAY_NAME="Example Mail" \
+  -e MAIL_INCOMING_HOST=mail.example.org \
+  -e MAIL_OUTGOING_HOST=mail.example.org \
   -e BACKEND_URL=http://app:3000 \
-  -v "$PWD/examples/legacy-email/overlay.json:/etc/wellknown-overlay/overlay.json:ro" \
-  -v "$PWD/examples/legacy-email/public:/var/lib/wellknown-overlay/public:ro" \
   wellknown-overlay-gateway
 ```
 
@@ -239,6 +278,8 @@ The gateway currently routes these paths to the overlay:
 - `/.well-known/mta-sts.txt`
 - `/mail/config-v1.1.xml`
 - `/Autodiscover/Autodiscover.xml`
+- `/AutoDiscover/AutoDiscover.xml`
+- `/autodiscover/autodiscover.xml`
 
 Run the gateway integration checks with Docker:
 
@@ -246,5 +287,5 @@ Run the gateway integration checks with Docker:
 WELLKNOWN_OVERLAY_INTEGRATION=1 go test ./docker/gateway -run TestGatewayIntegration -count=1 -v
 ```
 
-The check builds the gateway image, starts it with the email autoconfig example,
-and verifies health, overlay routes, placeholder fallback, and backend proxying.
+The check builds the gateway image, starts it from `MAIL_*` variables, and
+verifies health, overlay routes, placeholder fallback, and backend proxying.

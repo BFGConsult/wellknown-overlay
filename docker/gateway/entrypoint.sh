@@ -7,6 +7,8 @@ OVERLAY_LISTEN="${OVERLAY_LISTEN:-127.0.0.1:8765}"
 OVERLAY_UPSTREAM="http://${OVERLAY_LISTEN}"
 BACKEND_URL="${BACKEND_URL:-}"
 
+wellknown-overlay-docker-entrypoint prepare-config -config "$OVERLAY_CONFIG"
+
 cat >/etc/nginx/conf.d/default.conf <<EOF
 server {
     listen 80;

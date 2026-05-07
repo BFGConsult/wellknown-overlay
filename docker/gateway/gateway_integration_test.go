@@ -53,7 +53,7 @@ func TestGatewayIntegration(t *testing.T) {
 		}
 		assertGET(t, baseURL+"/.well-known/mail/apple.mobileconfig?emailaddress=alice@example.org", http.StatusOK, "com.apple.mail.managed")
 		assertPOST(t, baseURL+"/Autodiscover/Autodiscover.xml", autodiscoverRequest("alice@example.org"), http.StatusOK, "<LoginName>alice@example.org</LoginName>")
-		assertPOST(t, baseURL+"/autodiscover/autodiscover.xml", autodiscoverRequest("person+help@example.org"), http.StatusOK, "<LoginName>help@example.org</LoginName>")
+		assertPOST(t, baseURL+"/autodiscover/autodiscover.xml", autodiscoverRequest("person+help@example.org"), http.StatusOK, "<LoginName>person+help@example.org</LoginName>")
 
 		assertGET(t, baseURL+"/.well-known/openpgpkey/example", http.StatusNotFound, "")
 		assertGET(t, baseURL+"/", http.StatusOK, "standards-path overlay is running")
@@ -95,8 +95,11 @@ func runGateway(t *testing.T, ctx context.Context, repoRoot, image, network, bac
 		"--name", name,
 		"--network", network,
 		"-p", "127.0.0.1::80",
-		"-v", filepath.Join(repoRoot, "examples/mail-account/overlay.json") + ":/etc/wellknown-overlay/overlay.json:ro",
 		"-v", t.TempDir() + ":/var/lib/wellknown-overlay/public:ro",
+		"-e", "MAIL_DOMAIN=example.org",
+		"-e", "MAIL_DISPLAY_NAME=Example Mail",
+		"-e", "MAIL_INCOMING_HOST=mail.example.org",
+		"-e", "MAIL_OUTGOING_HOST=mail.example.org",
 	}
 	if backendURL != "" {
 		args = append(args, "-e", "BACKEND_URL="+backendURL)
