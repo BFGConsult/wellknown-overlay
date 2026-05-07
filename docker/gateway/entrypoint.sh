@@ -43,6 +43,14 @@ server {
     location = /Autodiscover/Autodiscover.xml {
         proxy_pass ${OVERLAY_UPSTREAM};
     }
+
+    location = /AutoDiscover/AutoDiscover.xml {
+        proxy_pass ${OVERLAY_UPSTREAM};
+    }
+
+    location = /autodiscover/autodiscover.xml {
+        proxy_pass ${OVERLAY_UPSTREAM};
+    }
 EOF
 
 if [ -n "$BACKEND_URL" ]; then

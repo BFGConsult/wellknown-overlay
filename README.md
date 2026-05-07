@@ -139,6 +139,17 @@ placeholders such as `%EMAILADDRESS%` can be filled:
 /.well-known/mail/apple.mobileconfig?emailaddress=user@example.org
 ```
 
+The module also serves Outlook Autodiscover XML:
+
+- `/Autodiscover/Autodiscover.xml`
+- `/AutoDiscover/AutoDiscover.xml`
+- `/autodiscover/autodiscover.xml`
+
+Autodiscover clients normally `POST` XML containing `EMailAddress`; the
+renderer uses that address for profile selection and username placeholder
+substitution. For local rendering and simple checks, the same route can also
+use `?emailaddress=user@example.org`.
+
 ## Usage
 
 Validate a config:

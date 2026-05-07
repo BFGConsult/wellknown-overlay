@@ -42,8 +42,12 @@ func (r *Responder) Render(routePath string) (Response, error) {
 }
 
 func (r *Responder) RenderRequest(routePath, rawQuery string) (Response, error) {
+	return r.RenderRequestBody(routePath, rawQuery, nil)
+}
+
+func (r *Responder) RenderRequestBody(routePath, rawQuery string, body []byte) (Response, error) {
 	if r.mailAccount != nil && isThunderbirdAutoconfigPath(routePath) {
-		emailAddress := queryValue(rawQuery, "emailaddress")
+		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
 		profile := r.mailAccount.SelectProfile(emailAddress)
 		body, err := RenderThunderbirdAutoconfig(profile, emailAddress)
 		if err != nil {
@@ -56,7 +60,7 @@ func (r *Responder) RenderRequest(routePath, rawQuery string) (Response, error) 
 		}, nil
 	}
 	if r.mailAccount != nil && routePath == AppleMobileconfigPath {
-		emailAddress := queryValue(rawQuery, "emailaddress")
+		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
 		profile := r.mailAccount.SelectProfile(emailAddress)
 		body, err := RenderAppleMobileconfig(profile, emailAddress)
 		if err != nil {
@@ -65,6 +69,22 @@ func (r *Responder) RenderRequest(routePath, rawQuery string) (Response, error) 
 		return Response{
 			Status:      http.StatusOK,
 			ContentType: "application/x-apple-aspen-config",
+			Body:        body,
+		}, nil
+	}
+	if r.mailAccount != nil && isAutodiscoverPath(routePath) {
+		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
+		if emailAddress == "" {
+			emailAddress = EmailAddressFromAutodiscoverRequest(body)
+		}
+		profile := r.mailAccount.SelectProfile(emailAddress)
+		body, err := RenderAutodiscover(profile, emailAddress)
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{
+			Status:      http.StatusOK,
+			ContentType: "application/xml",
 			Body:        body,
 		}, nil
 	}
@@ -101,6 +121,24 @@ func isThunderbirdAutoconfigPath(routePath string) bool {
 		}
 	}
 	return false
+}
+
+func isAutodiscoverPath(routePath string) bool {
+	for _, path := range AutodiscoverPaths() {
+		if routePath == path {
+			return true
+		}
+	}
+	return false
+}
+
+func queryValueAny(rawQuery string, keys ...string) string {
+	for _, key := range keys {
+		if value := queryValue(rawQuery, key); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func queryValue(rawQuery, key string) string {

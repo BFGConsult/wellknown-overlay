@@ -1,9 +1,11 @@
 package overlay
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/fstest"
 )
@@ -40,6 +42,36 @@ func TestHTTPHandlerServesHealthCheck(t *testing.T) {
 	}
 	if string(body) != "ok\n" {
 		t.Fatalf("body = %q, want ok", body)
+	}
+}
+
+func TestHTTPHandlerAcceptsAutodiscoverPost(t *testing.T) {
+	handler := NewHTTPHandler(NewResponder(Config{
+		MailAccount: testMailAccount(),
+	}, fstest.MapFS{}))
+
+	body := []byte(`<Autodiscover>
+  <Request>
+    <EMailAddress>bfg@efn.no</EMailAddress>
+  </Request>
+</Autodiscover>`)
+	req := httptest.NewRequest(http.MethodPost, AutodiscoverPath, bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	resp := rec.Result()
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if got := resp.Header.Get("Content-Type"); got != "application/xml" {
+		t.Fatalf("content type = %q, want application/xml", got)
+	}
+	if !strings.Contains(rec.Body.String(), "<LoginName>bfg@efn.no</LoginName>") {
+		t.Fatalf("body does not contain substituted login:\n%s", rec.Body.String())
 	}
 }
 

@@ -117,6 +117,32 @@ func TestResponderRendersAppleMobileconfigRoute(t *testing.T) {
 	}
 }
 
+func TestResponderRendersAutodiscoverRoute(t *testing.T) {
+	responder := NewResponder(Config{
+		MailAccount: testMailAccount(),
+	}, fstest.MapFS{})
+
+	response, err := responder.RenderRequestBody(AutodiscoverPath, "", []byte(`<Autodiscover>
+  <Request>
+    <EMailAddress>bfg@efn.no</EMailAddress>
+  </Request>
+</Autodiscover>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if response.Status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Status, http.StatusOK)
+	}
+	if response.ContentType != "application/xml" {
+		t.Fatalf("content type = %q, want application/xml", response.ContentType)
+	}
+	body := string(response.Body)
+	if !strings.Contains(body, "<LoginName>bfg@efn.no</LoginName>") {
+		t.Fatalf("autodiscover does not contain substituted login name:\n%s", body)
+	}
+}
+
 func TestResponderSelectsMailAccountProfileFromEmailAddress(t *testing.T) {
 	account := MailAccount{Profiles: []MailAccountProfile{
 		testMailAccountProfile("*@efn.no", "EFN"),
@@ -137,6 +163,34 @@ func TestResponderSelectsMailAccountProfileFromEmailAddress(t *testing.T) {
 		t.Fatalf("body does not use selected profile:\n%s", body)
 	}
 	if !strings.Contains(body, "<username>help@efn.no</username>") {
+		t.Fatalf("body does not use selected profile username:\n%s", body)
+	}
+}
+
+func TestResponderSelectsAutodiscoverProfileFromRequestBody(t *testing.T) {
+	account := MailAccount{Profiles: []MailAccountProfile{
+		testMailAccountProfile("*@efn.no", "EFN"),
+		testMailAccountProfile("*+help@efn.no", "Helpdesk"),
+		testMailAccountProfile("default", "Default"),
+	}}
+	account.Profiles[1].Incoming.Username = "help@efn.no"
+	account.Profiles[1].Outgoing.Username = "help@efn.no"
+
+	responder := NewResponder(Config{MailAccount: &account}, fstest.MapFS{})
+	response, err := responder.RenderRequestBody(AutodiscoverPath, "", []byte(`<Autodiscover>
+  <Request>
+    <EMailAddress>person+help@efn.no</EMailAddress>
+  </Request>
+</Autodiscover>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := string(response.Body)
+	if !strings.Contains(body, "<DisplayName>Helpdesk</DisplayName>") {
+		t.Fatalf("body does not use selected profile:\n%s", body)
+	}
+	if !strings.Contains(body, "<LoginName>help@efn.no</LoginName>") {
 		t.Fatalf("body does not use selected profile username:\n%s", body)
 	}
 }

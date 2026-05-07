@@ -52,6 +52,8 @@ func TestGatewayIntegration(t *testing.T) {
 			t.Fatal("legacy email routes served different bodies")
 		}
 		assertGET(t, baseURL+"/.well-known/mail/apple.mobileconfig?emailaddress=alice@example.org", http.StatusOK, "com.apple.mail.managed")
+		assertPOST(t, baseURL+"/Autodiscover/Autodiscover.xml", autodiscoverRequest("alice@example.org"), http.StatusOK, "<LoginName>alice@example.org</LoginName>")
+		assertPOST(t, baseURL+"/autodiscover/autodiscover.xml", autodiscoverRequest("person+help@example.org"), http.StatusOK, "<LoginName>help@example.org</LoginName>")
 
 		assertGET(t, baseURL+"/.well-known/openpgpkey/example", http.StatusNotFound, "")
 		assertGET(t, baseURL+"/", http.StatusOK, "standards-path overlay is running")
@@ -80,6 +82,7 @@ func TestGatewayIntegration(t *testing.T) {
 		assertGET(t, baseURL+"/healthz", http.StatusOK, "ok\n")
 		assertGET(t, baseURL+"/mail/config-v1.1.xml", http.StatusOK, "<clientConfig")
 		assertGET(t, baseURL+"/.well-known/mail/apple.mobileconfig?emailaddress=alice@example.org", http.StatusOK, "com.apple.mail.managed")
+		assertPOST(t, baseURL+"/Autodiscover/Autodiscover.xml", autodiscoverRequest("alice@example.org"), http.StatusOK, "<Autodiscover")
 	})
 }
 
@@ -166,6 +169,39 @@ func assertGET(t *testing.T, url string, wantStatus int, wantBodySubstring strin
 		t.Fatalf("GET %s body %q does not contain %q", url, body, wantBodySubstring)
 	}
 	return string(body)
+}
+
+func assertPOST(t *testing.T, url, requestBody string, wantStatus int, wantBodySubstring string) string {
+	t.Helper()
+
+	client := http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Post(url, "text/xml", strings.NewReader(requestBody))
+	if err != nil {
+		t.Fatalf("POST %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read %s: %v", url, err)
+	}
+	if resp.StatusCode != wantStatus {
+		t.Fatalf("POST %s status = %d, want %d; body %q", url, resp.StatusCode, wantStatus, body)
+	}
+	if wantBodySubstring != "" && !strings.Contains(string(body), wantBodySubstring) {
+		t.Fatalf("POST %s body %q does not contain %q", url, body, wantBodySubstring)
+	}
+	return string(body)
+}
+
+func autodiscoverRequest(emailAddress string) string {
+	return `<?xml version="1.0" encoding="utf-8"?>
+<Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">
+  <Request>
+    <EMailAddress>` + emailAddress + `</EMailAddress>
+    <AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a</AcceptableResponseSchema>
+  </Request>
+</Autodiscover>`
 }
 
 func runDocker(t *testing.T, ctx context.Context, dir string, args ...string) {

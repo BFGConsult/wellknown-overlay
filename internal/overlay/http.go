@@ -2,6 +2,7 @@ package overlay
 
 import (
 	"errors"
+	"io"
 	"net/http"
 )
 
@@ -9,7 +10,7 @@ const HealthPath = "/healthz"
 
 func NewHTTPHandler(responder *Responder) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && !(r.Method == http.MethodPost && isAutodiscoverPath(r.URL.Path)) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -25,7 +26,17 @@ func NewHTTPHandler(responder *Responder) http.Handler {
 			return
 		}
 
-		response, err := responder.RenderRequest(r.URL.Path, r.URL.RawQuery)
+		var body []byte
+		if r.Method == http.MethodPost {
+			var err error
+			body, err = io.ReadAll(io.LimitReader(r.Body, 64*1024))
+			if err != nil {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+		}
+
+		response, err := responder.RenderRequestBody(r.URL.Path, r.URL.RawQuery, body)
 		if errors.Is(err, ErrNotFound) {
 			http.NotFound(w, r)
 			return
