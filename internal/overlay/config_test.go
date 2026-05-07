@@ -27,9 +27,9 @@ func TestConfigValidateRejectsEscapingFiles(t *testing.T) {
 	}
 }
 
-func TestConfigValidateAcceptsEmailAutoconfigWithoutStaticRoutes(t *testing.T) {
+func TestConfigValidateAcceptsMailAccountWithoutStaticRoutes(t *testing.T) {
 	cfg := Config{
-		EmailAutoconfig: testEmailAutoconfig(),
+		MailAccount: testMailAccount(),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -37,34 +37,34 @@ func TestConfigValidateAcceptsEmailAutoconfigWithoutStaticRoutes(t *testing.T) {
 	}
 }
 
-func TestConfigValidateRejectsEmailAutoconfigStaticRouteConflict(t *testing.T) {
+func TestConfigValidateRejectsMailAccountStaticRouteConflict(t *testing.T) {
 	cfg := Config{
 		Routes: []Route{
-			{Path: EmailAutoconfigWellKnownPath, File: "config-v1.1.xml"},
+			{Path: ThunderbirdAutoconfigWellKnownPath, File: "config-v1.1.xml"},
 		},
-		EmailAutoconfig: testEmailAutoconfig(),
+		MailAccount: testMailAccount(),
 	}
 
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected email_autoconfig route conflict to be rejected")
+		t.Fatal("expected mail_account route conflict to be rejected")
 	}
 }
 
-func TestConfigValidateRejectsIncompleteEmailAutoconfig(t *testing.T) {
+func TestConfigValidateRejectsIncompleteMailAccount(t *testing.T) {
 	cfg := Config{
-		EmailAutoconfig: &EmailAutoconfig{
+		MailAccount: &MailAccount{
 			Domain:      "example.org",
 			DisplayName: "Example Mail",
 		},
 	}
 
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected incomplete email_autoconfig to be rejected")
+		t.Fatal("expected incomplete mail_account to be rejected")
 	}
 }
 
-func testEmailAutoconfig() *EmailAutoconfig {
-	return &EmailAutoconfig{
+func testMailAccount() *MailAccount {
+	return &MailAccount{
 		Domain:      "efn.no",
 		DisplayName: "EFN",
 		Incoming: EmailServerConfig{

@@ -7,7 +7,7 @@ site, but you still need to serve small standards-owned paths such as
 `/.well-known/autoconfig/...`, `/Autodiscover/Autodiscover.xml`, or future
 modules such as WKD for OpenPGP.
 
-The project starts from the idea behind `email-autoconfig-php`: keep one source
+The project starts from the idea behind `mail-account-php`: keep one source
 of truth, render the protocol-specific outputs, and avoid turning a handful of
 well-known routes into a full backend application.
 
@@ -55,14 +55,15 @@ Example:
 
 Route paths must be absolute and are matched exactly.
 
-### Email Autoconfig
+### Mail Account
 
-The `email_autoconfig` module renders Thunderbird-compatible autoconfiguration
-XML from one structured source of truth:
+The `mail_account` module describes one mail account setup as structured data.
+The current renderer serves Thunderbird-compatible autoconfiguration XML from
+that source of truth:
 
 ```json
 {
-  "email_autoconfig": {
+  "mail_account": {
     "domain": "efn.no",
     "display_name": "EFN",
     "incoming": {

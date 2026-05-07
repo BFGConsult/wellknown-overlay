@@ -17,9 +17,9 @@ type Response struct {
 }
 
 type Responder struct {
-	routes          map[string]Route
-	emailAutoconfig *EmailAutoconfig
-	files           fs.FS
+	routes      map[string]Route
+	mailAccount *MailAccount
+	files       fs.FS
 }
 
 func NewResponder(cfg Config, files fs.FS) *Responder {
@@ -29,15 +29,15 @@ func NewResponder(cfg Config, files fs.FS) *Responder {
 	}
 
 	return &Responder{
-		routes:          routes,
-		emailAutoconfig: cfg.EmailAutoconfig,
-		files:           files,
+		routes:      routes,
+		mailAccount: cfg.MailAccount,
+		files:       files,
 	}
 }
 
 func (r *Responder) Render(routePath string) (Response, error) {
-	if r.emailAutoconfig != nil && isEmailAutoconfigPath(routePath) {
-		body, err := RenderEmailAutoconfig(*r.emailAutoconfig)
+	if r.mailAccount != nil && isThunderbirdAutoconfigPath(routePath) {
+		body, err := RenderThunderbirdAutoconfig(*r.mailAccount)
 		if err != nil {
 			return Response{}, err
 		}
@@ -73,8 +73,8 @@ func (r *Responder) Render(routePath string) (Response, error) {
 	}, nil
 }
 
-func isEmailAutoconfigPath(routePath string) bool {
-	for _, path := range EmailAutoconfigPaths() {
+func isThunderbirdAutoconfigPath(routePath string) bool {
+	for _, path := range ThunderbirdAutoconfigPaths() {
 		if routePath == path {
 			return true
 		}

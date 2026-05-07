@@ -90,9 +90,9 @@ func TestExamplesServeDeclaredRoutes(t *testing.T) {
 	}
 }
 
-func TestEmailAutoconfigExampleServesModuleRoutes(t *testing.T) {
+func TestMailAccountExampleServesModuleRoutes(t *testing.T) {
 	repoRoot := findRepoRoot(t)
-	configPath := filepath.Join(repoRoot, "examples/email-autoconfig/overlay.json")
+	configPath := filepath.Join(repoRoot, "examples/mail-account/overlay.json")
 
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
@@ -103,7 +103,7 @@ func TestEmailAutoconfigExampleServesModuleRoutes(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	var firstBody string
-	for i, routePath := range EmailAutoconfigPaths() {
+	for i, routePath := range ThunderbirdAutoconfigPaths() {
 		resp, err := http.Get(server.URL + routePath)
 		if err != nil {
 			t.Fatalf("get route: %v", err)

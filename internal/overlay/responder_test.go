@@ -50,16 +50,16 @@ func TestResponderRejectsUndeclaredRoute(t *testing.T) {
 	}
 }
 
-func TestResponderRendersEmailAutoconfigRoutes(t *testing.T) {
+func TestResponderRendersMailAccountRoutes(t *testing.T) {
 	responder := NewResponder(Config{
-		EmailAutoconfig: testEmailAutoconfig(),
+		MailAccount: testMailAccount(),
 	}, fstest.MapFS{})
 
-	wellKnownResponse, err := responder.Render(EmailAutoconfigWellKnownPath)
+	wellKnownResponse, err := responder.Render(ThunderbirdAutoconfigWellKnownPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacyResponse, err := responder.Render(EmailAutoconfigLegacyPath)
+	legacyResponse, err := responder.Render(ThunderbirdAutoconfigLegacyPath)
 	if err != nil {
 		t.Fatal(err)
 	}

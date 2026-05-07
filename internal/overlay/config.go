@@ -10,8 +10,8 @@ import (
 )
 
 type Config struct {
-	Routes          []Route          `json:"routes,omitempty"`
-	EmailAutoconfig *EmailAutoconfig `json:"email_autoconfig,omitempty"`
+	Routes      []Route      `json:"routes,omitempty"`
+	MailAccount *MailAccount `json:"mail_account,omitempty"`
 }
 
 type Route struct {
@@ -20,7 +20,7 @@ type Route struct {
 	ContentType string `json:"content_type,omitempty"`
 }
 
-type EmailAutoconfig struct {
+type MailAccount struct {
 	Domain           string            `json:"domain"`
 	DisplayName      string            `json:"display_name"`
 	DisplayShortName string            `json:"display_short_name,omitempty"`
@@ -56,7 +56,7 @@ func LoadConfig(filename string) (Config, error) {
 }
 
 func (cfg Config) Validate() error {
-	if len(cfg.Routes) == 0 && cfg.EmailAutoconfig == nil {
+	if len(cfg.Routes) == 0 && cfg.MailAccount == nil {
 		return errors.New("config must declare at least one route or module")
 	}
 
@@ -87,14 +87,14 @@ func (cfg Config) Validate() error {
 		}
 	}
 
-	if cfg.EmailAutoconfig != nil {
-		for _, modulePath := range EmailAutoconfigPaths() {
+	if cfg.MailAccount != nil {
+		for _, modulePath := range ThunderbirdAutoconfigPaths() {
 			if _, ok := seen[modulePath]; ok {
-				return fmt.Errorf("email_autoconfig route conflicts with static route %q", modulePath)
+				return fmt.Errorf("mail_account route conflicts with static route %q", modulePath)
 			}
 			seen[modulePath] = struct{}{}
 		}
-		if err := cfg.EmailAutoconfig.Validate(); err != nil {
+		if err := cfg.MailAccount.Validate(); err != nil {
 			return err
 		}
 	}
@@ -104,23 +104,23 @@ func (cfg Config) Validate() error {
 
 func (cfg Config) ModulePaths() []string {
 	var paths []string
-	if cfg.EmailAutoconfig != nil {
-		paths = append(paths, EmailAutoconfigPaths()...)
+	if cfg.MailAccount != nil {
+		paths = append(paths, ThunderbirdAutoconfigPaths()...)
 	}
 	return paths
 }
 
-func (cfg EmailAutoconfig) Validate() error {
+func (cfg MailAccount) Validate() error {
 	if cfg.Domain == "" {
-		return errors.New("email_autoconfig.domain is required")
+		return errors.New("mail_account.domain is required")
 	}
 	if cfg.DisplayName == "" {
-		return errors.New("email_autoconfig.display_name is required")
+		return errors.New("mail_account.display_name is required")
 	}
-	if err := cfg.Incoming.Validate("email_autoconfig.incoming"); err != nil {
+	if err := cfg.Incoming.Validate("mail_account.incoming"); err != nil {
 		return err
 	}
-	if err := cfg.Outgoing.Validate("email_autoconfig.outgoing"); err != nil {
+	if err := cfg.Outgoing.Validate("mail_account.outgoing"); err != nil {
 		return err
 	}
 	return nil

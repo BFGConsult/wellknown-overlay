@@ -1,5 +1,5 @@
 {
-  "email_autoconfig": {
+  "mail_account": {
     "domain": "example.org",
     "display_name": "Example Mail",
     "display_short_name": "Example",

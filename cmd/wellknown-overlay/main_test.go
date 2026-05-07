@@ -35,7 +35,7 @@ func TestValidateCommandReportsModuleRoutes(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "overlay.json")
 	if err := os.WriteFile(configPath, []byte(`{
-  "email_autoconfig": {
+  "mail_account": {
     "domain": "example.org",
     "display_name": "Example Mail",
     "incoming": {

@@ -6,18 +6,18 @@ import (
 )
 
 const (
-	EmailAutoconfigWellKnownPath = "/.well-known/autoconfig/mail/config-v1.1.xml"
-	EmailAutoconfigLegacyPath    = "/mail/config-v1.1.xml"
+	ThunderbirdAutoconfigWellKnownPath = "/.well-known/autoconfig/mail/config-v1.1.xml"
+	ThunderbirdAutoconfigLegacyPath    = "/mail/config-v1.1.xml"
 )
 
-func EmailAutoconfigPaths() []string {
+func ThunderbirdAutoconfigPaths() []string {
 	return []string{
-		EmailAutoconfigWellKnownPath,
-		EmailAutoconfigLegacyPath,
+		ThunderbirdAutoconfigWellKnownPath,
+		ThunderbirdAutoconfigLegacyPath,
 	}
 }
 
-func RenderEmailAutoconfig(cfg EmailAutoconfig) ([]byte, error) {
+func RenderThunderbirdAutoconfig(cfg MailAccount) ([]byte, error) {
 	shortName := cfg.DisplayShortName
 	if shortName == "" {
 		shortName = cfg.DisplayName
