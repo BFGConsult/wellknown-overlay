@@ -10,6 +10,7 @@ import (
 const (
 	ThunderbirdAutoconfigWellKnownPath = "/.well-known/autoconfig/mail/config-v1.1.xml"
 	ThunderbirdAutoconfigLegacyPath    = "/mail/config-v1.1.xml"
+	MailSetupPath                      = "/mail/setup"
 	AppleMobileconfigPath              = "/.well-known/mail/apple.mobileconfig"
 	AutodiscoverPath                   = "/Autodiscover/Autodiscover.xml"
 	defaultProfileMatch                = "default"
@@ -17,6 +18,7 @@ const (
 
 func MailAccountPaths() []string {
 	paths := ThunderbirdAutoconfigPaths()
+	paths = append(paths, MailSetupPath)
 	paths = append(paths, AppleMobileconfigPath)
 	return append(paths, AutodiscoverPaths()...)
 }
@@ -71,6 +73,13 @@ func (cfg MailAccount) SelectProfile(emailAddress string) MailAccountProfile {
 	return defaultProfile
 }
 
+func (cfg MailAccount) ManualSetupURL() string {
+	if cfg.ManualSetup == nil {
+		return ""
+	}
+	return cfg.ManualSetup.URL
+}
+
 type profileMatchScore struct {
 	literalCount  int
 	wildcardCount int
@@ -100,7 +109,7 @@ func (score profileMatchScore) betterThan(other profileMatchScore) bool {
 	return score.index < other.index
 }
 
-func RenderThunderbirdAutoconfig(cfg MailAccountProfile, emailAddress string) ([]byte, error) {
+func RenderThunderbirdAutoconfig(cfg MailAccountProfile, emailAddress, documentationURL string) ([]byte, error) {
 	cfg.Incoming.Username = substituteMailVariables(cfg.Incoming.Username, emailAddress)
 	cfg.Outgoing.Username = substituteMailVariables(cfg.Outgoing.Username, emailAddress)
 
@@ -118,6 +127,7 @@ func RenderThunderbirdAutoconfig(cfg MailAccountProfile, emailAddress string) ([
 			DisplayShortName: shortName,
 			IncomingServer:   serverConfigXML(cfg.Incoming),
 			OutgoingServer:   serverConfigXML(cfg.Outgoing),
+			Documentation:    documentationXML(documentationURL),
 		},
 	}
 
@@ -127,6 +137,18 @@ func RenderThunderbirdAutoconfig(cfg MailAccountProfile, emailAddress string) ([
 	}
 
 	return append([]byte(xml.Header), append(body, '\n')...), nil
+}
+
+func documentationXML(url string) *documentationURLXML {
+	if url == "" {
+		return nil
+	}
+	return &documentationURLXML{
+		URL: url,
+		Descriptions: []documentationDescriptionXML{
+			{Lang: "en", Text: "Manual email setup instructions"},
+		},
+	}
 }
 
 func serverConfigXML(cfg EmailServerConfig) serverXML {
@@ -147,12 +169,13 @@ type clientConfigXML struct {
 }
 
 type emailProviderXML struct {
-	ID               string    `xml:"id,attr"`
-	Domain           string    `xml:"domain"`
-	DisplayName      string    `xml:"displayName"`
-	DisplayShortName string    `xml:"displayShortName"`
-	IncomingServer   serverXML `xml:"incomingServer"`
-	OutgoingServer   serverXML `xml:"outgoingServer"`
+	ID               string               `xml:"id,attr"`
+	Domain           string               `xml:"domain"`
+	DisplayName      string               `xml:"displayName"`
+	DisplayShortName string               `xml:"displayShortName"`
+	IncomingServer   serverXML            `xml:"incomingServer"`
+	OutgoingServer   serverXML            `xml:"outgoingServer"`
+	Documentation    *documentationURLXML `xml:"documentation,omitempty"`
 }
 
 type serverXML struct {
@@ -162,4 +185,14 @@ type serverXML struct {
 	SocketType     string `xml:"socketType"`
 	Authentication string `xml:"authentication"`
 	Username       string `xml:"username"`
+}
+
+type documentationURLXML struct {
+	URL          string                        `xml:"url,attr"`
+	Descriptions []documentationDescriptionXML `xml:"descr"`
+}
+
+type documentationDescriptionXML struct {
+	Lang string `xml:"lang,attr"`
+	Text string `xml:",chardata"`
 }

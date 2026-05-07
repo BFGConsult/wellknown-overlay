@@ -52,7 +52,7 @@ func TestResponderRejectsUndeclaredRoute(t *testing.T) {
 
 func TestResponderRendersMailAccountRoutes(t *testing.T) {
 	responder := NewResponder(Config{
-		MailAccount: testMailAccount(),
+		MailAccount: testMailAccountWithManualSetup(),
 	}, fstest.MapFS{})
 
 	wellKnownResponse, err := responder.Render(ThunderbirdAutoconfigWellKnownPath)
@@ -87,11 +87,35 @@ func TestResponderRendersMailAccountRoutes(t *testing.T) {
 		"<port>587</port>",
 		"<socketType>STARTTLS</socketType>",
 		"<username>%EMAILADDRESS%</username>",
+		`<documentation url="https://autoconfig.efn.no/mail/setup">`,
+		`<descr lang="en">Manual email setup instructions</descr>`,
 	}
 	for _, want := range wantSubstrings {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body does not contain %q:\n%s", want, body)
 		}
+	}
+}
+
+func TestResponderRendersMailSetupRoute(t *testing.T) {
+	responder := NewResponder(Config{
+		MailAccount: testMailAccount(),
+	}, fstest.MapFS{})
+
+	response, err := responder.RenderRequest(MailSetupPath, "emailaddress=bfg@efn.no&lang=nb")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if response.Status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Status, http.StatusOK)
+	}
+	if response.ContentType != "text/html; charset=utf-8" {
+		t.Fatalf("content type = %q, want text/html", response.ContentType)
+	}
+	body := string(response.Body)
+	if !strings.Contains(body, "<h1>E-postoppsett for EFN</h1>") || !strings.Contains(body, "bfg@efn.no") {
+		t.Fatalf("manual setup body does not contain expected content:\n%s", body)
 	}
 }
 

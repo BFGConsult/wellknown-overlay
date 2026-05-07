@@ -21,7 +21,12 @@ type Route struct {
 }
 
 type MailAccount struct {
-	Profiles []MailAccountProfile `json:"profiles"`
+	ManualSetup *MailManualSetupConfig `json:"manual_setup,omitempty"`
+	Profiles    []MailAccountProfile   `json:"profiles"`
+}
+
+type MailManualSetupConfig struct {
+	URL string `json:"url,omitempty"`
 }
 
 type MailAccountProfile struct {

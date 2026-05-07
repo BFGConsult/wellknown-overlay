@@ -100,6 +100,14 @@ func testMailAccount() *MailAccount {
 	}
 }
 
+func testMailAccountWithManualSetup() *MailAccount {
+	account := testMailAccount()
+	account.ManualSetup = &MailManualSetupConfig{
+		URL: "https://autoconfig.efn.no/mail/setup",
+	}
+	return account
+}
+
 func testMailAccountProfile(match, displayName string) MailAccountProfile {
 	return MailAccountProfile{
 		Match:       match,

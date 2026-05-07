@@ -1,5 +1,8 @@
 {
   "mail_account": {
+    "manual_setup": {
+      "url": "https://autoconfig.example.org/mail/setup"
+    },
     "profiles": [
       {
         "match": "*+help@example.org",

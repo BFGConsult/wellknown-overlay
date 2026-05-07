@@ -81,6 +81,7 @@ func TestGatewayIntegration(t *testing.T) {
 		assertGET(t, baseURL+"/", http.StatusOK, "backend ok\n")
 		assertGET(t, baseURL+"/healthz", http.StatusOK, "ok\n")
 		assertGET(t, baseURL+"/mail/config-v1.1.xml", http.StatusOK, "<clientConfig")
+		assertGET(t, baseURL+"/mail/setup?emailaddress=alice@example.org&lang=nb", http.StatusOK, "<h1>E-postoppsett for Example Mail</h1>")
 		assertGET(t, baseURL+"/.well-known/mail/apple.mobileconfig?emailaddress=alice@example.org", http.StatusOK, "com.apple.mail.managed")
 		assertPOST(t, baseURL+"/Autodiscover/Autodiscover.xml", autodiscoverRequest("alice@example.org"), http.StatusOK, "<Autodiscover")
 	})
@@ -116,6 +117,7 @@ func TestGatewayIntegration(t *testing.T) {
 		assertGETHost(t, baseURL, "example.org", "/", http.StatusOK, "backend ok\n")
 		assertGETHost(t, baseURL, "autoconfig.example.org", "/", http.StatusOK, "wellknown-overlay is running")
 		assertGETHost(t, baseURL, "autoconfig.example.org", "/mail/config-v1.1.xml", http.StatusOK, "<clientConfig")
+		assertGETHost(t, baseURL, "autoconfig.example.org", "/mail/setup?emailaddress=alice@example.org", http.StatusOK, "<h1>Email setup for Example Mail</h1>")
 		assertPOSTHost(t, baseURL, "autodiscover.example.org", "/Autodiscover/Autodiscover.xml", autodiscoverRequest("alice@example.org"), http.StatusOK, "<Autodiscover")
 		assertGETHost(t, baseURL, "stray.example.org", "/", http.StatusNotFound, "")
 	})
@@ -135,6 +137,7 @@ func runGateway(t *testing.T, ctx context.Context, repoRoot, image, network, bac
 		"-e", "MAIL_DISPLAY_NAME=Example Mail",
 		"-e", "MAIL_INCOMING_HOST=mail.example.org",
 		"-e", "MAIL_OUTGOING_HOST=mail.example.org",
+		"-e", "MAIL_SETUP_URL=https://autoconfig.example.org/mail/setup",
 	}
 	if backendURL != "" {
 		args = append(args, "-e", "BACKEND_URL="+backendURL)

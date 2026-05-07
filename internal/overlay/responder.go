@@ -49,13 +49,27 @@ func (r *Responder) RenderRequestBody(routePath, rawQuery string, body []byte) (
 	if r.mailAccount != nil && isThunderbirdAutoconfigPath(routePath) {
 		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
 		profile := r.mailAccount.SelectProfile(emailAddress)
-		body, err := RenderThunderbirdAutoconfig(profile, emailAddress)
+		body, err := RenderThunderbirdAutoconfig(profile, emailAddress, r.mailAccount.ManualSetupURL())
 		if err != nil {
 			return Response{}, err
 		}
 		return Response{
 			Status:      http.StatusOK,
 			ContentType: "application/xml",
+			Body:        body,
+		}, nil
+	}
+	if r.mailAccount != nil && routePath == MailSetupPath {
+		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
+		lang := queryValueAny(rawQuery, "lang", "locale")
+		profile := r.mailAccount.SelectProfile(emailAddress)
+		body, _, err := RenderMailSetup(r.files, profile, emailAddress, lang)
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{
+			Status:      http.StatusOK,
+			ContentType: "text/html; charset=utf-8",
 			Body:        body,
 		}, nil
 	}

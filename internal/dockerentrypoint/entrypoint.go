@@ -151,8 +151,13 @@ func MailAccountConfigFromEnv() (overlay.Config, error) {
 	}
 
 	displayName := EnvOrDefault("MAIL_DISPLAY_NAME", domain)
+	var manualSetup *overlay.MailManualSetupConfig
+	if url := os.Getenv("MAIL_SETUP_URL"); url != "" {
+		manualSetup = &overlay.MailManualSetupConfig{URL: url}
+	}
 	cfg := overlay.Config{
 		MailAccount: &overlay.MailAccount{
+			ManualSetup: manualSetup,
 			Profiles: []overlay.MailAccountProfile{
 				{
 					Match:            "default",

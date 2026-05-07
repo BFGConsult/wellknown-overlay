@@ -64,6 +64,9 @@ truth:
 ```json
 {
   "mail_account": {
+    "manual_setup": {
+      "url": "https://autoconfig.efn.no/mail/setup"
+    },
     "profiles": [
       {
         "match": "*+bfg@efn.no",
@@ -127,6 +130,20 @@ When enabled, the module owns these exact Thunderbird routes:
 The gateway can also serve `/mail/config-v1.1.xml` for
 `autoconfig.example.org` when DNS and proxy hostnames point that subdomain at
 the gateway.
+
+If `manual_setup.url` is set, Thunderbird Autoconfig includes a documentation
+link to that URL. The mail account module also serves a human-readable setup
+template from the same profile data:
+
+- `/mail/setup`
+
+The built-in English template lives at `mail-setup.md`; deployments can
+override it by mounting `mail-setup.md` in the overlay root. Translations are
+stored as gettext PO files such as `translations/nb.po` and selected with
+`?lang=nb`. The renderer replaces placeholders such as `{{email_address}}`,
+`{{incoming.hostname}}`, and `{{outgoing.username}}` on the server. If no
+`emailaddress` query parameter is provided, the page uses human-readable
+descriptors such as `your full email address`.
 
 The module also serves an unsigned Apple configuration profile:
 
@@ -197,6 +214,9 @@ certificate verification for diagnosis only. Suggestions are intentionally
 deployment-neutral and refer to DNS, HTTPS certificates, reverse proxy/ingress
 routing, and overlay endpoint reachability.
 
+See `COVERAGE.md` for expected and manually verified mail-client discovery
+support.
+
 ## Reverse Proxy Sketch
 
 ```nginx
@@ -265,6 +285,8 @@ Common `MAIL_*` variables:
   `password-cleartext`.
 - `MAIL_USERNAME` defaults to `%EMAILADDRESS%` and is used for both directions
   unless `MAIL_INCOMING_USERNAME` or `MAIL_OUTGOING_USERNAME` are set.
+- `MAIL_SETUP_URL` is optional. When set, generated Thunderbird Autoconfig XML
+  links to that human-readable setup page.
 
 If gateway-only variables such as `BACKEND_URL` are set on the core image, the
 Docker entrypoint helper warns that they only affect the gateway image. The
@@ -316,6 +338,7 @@ The gateway currently routes these paths to the overlay:
 - `/.well-known/security.txt`
 - `/.well-known/mta-sts.txt`
 - `/mail/config-v1.1.xml`
+- `/mail/setup`
 - `/Autodiscover/Autodiscover.xml`
 - `/AutoDiscover/AutoDiscover.xml`
 - `/autodiscover/autodiscover.xml`
