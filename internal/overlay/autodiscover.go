@@ -19,7 +19,8 @@ func RenderAutodiscover(cfg MailAccountProfile, emailAddress string) ([]byte, er
 	doc := autodiscoverXML{
 		Response: autodiscoverResponseXML{
 			User: autodiscoverUserXML{
-				DisplayName: cfg.DisplayName,
+				DisplayName:  cfg.DisplayName,
+				EmailAddress: emailAddress,
 			},
 			Account: autodiscoverAccountXML{
 				AccountType: "email",
@@ -75,10 +76,11 @@ func autodiscoverProtocol(cfg EmailServerConfig, outgoing bool) autodiscoverProt
 	case "ssl", "tls", "ssl/tls":
 		protocol.SSL = "on"
 	case "starttls":
-		protocol.SSL = "off"
 		protocol.Encryption = "TLS"
 	default:
-		protocol.SSL = "off"
+		if !outgoing {
+			protocol.SSL = "off"
+		}
 	}
 
 	return protocol
@@ -123,7 +125,8 @@ type autodiscoverResponseXML struct {
 }
 
 type autodiscoverUserXML struct {
-	DisplayName string `xml:"DisplayName"`
+	DisplayName  string `xml:"DisplayName"`
+	EmailAddress string `xml:"EmailAddress,omitempty"`
 }
 
 type autodiscoverAccountXML struct {

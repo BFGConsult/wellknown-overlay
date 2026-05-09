@@ -16,6 +16,7 @@ func TestRenderAutodiscoverUsesMailAccountSettings(t *testing.T) {
 		`<Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/responseschema/2006">`,
 		`<Response xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a">`,
 		"<DisplayName>EFN</DisplayName>",
+		"<EmailAddress>bfg@efn.no</EmailAddress>",
 		"<AccountType>email</AccountType>",
 		"<Action>settings</Action>",
 		"<Type>IMAP</Type>",
@@ -31,6 +32,9 @@ func TestRenderAutodiscoverUsesMailAccountSettings(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("body does not contain %q:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "<SSL>off</SSL>") {
+		t.Fatalf("body contains unnecessary SMTP SSL=off marker:\n%s", got)
 	}
 }
 
