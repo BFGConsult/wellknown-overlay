@@ -212,7 +212,9 @@ when any selected profile fails. Supported profiles are `THUNDERBIRD`,
 reported. TLS certificates are verified by default; `-insecure` or `-k` disables
 certificate verification for diagnosis only. Suggestions are intentionally
 deployment-neutral and refer to DNS, HTTPS certificates, reverse proxy/ingress
-routing, and overlay endpoint reachability.
+routing, and overlay endpoint reachability. The check also reports RFC 6186 and
+Autodiscover SRV records, deriving suggested DNS records from the rendered mail
+account settings without failing otherwise-working HTTP discovery checks.
 
 See `COVERAGE.md` for expected and manually verified mail-client discovery
 support.

@@ -37,6 +37,7 @@ type Options struct {
 type Checker struct {
 	HTTPClient *http.Client
 	LookupHost func(context.Context, string) ([]string, error)
+	LookupSRV  func(context.Context, string, string, string) (string, []*net.SRV, error)
 	Stdout     io.Writer
 }
 
@@ -101,6 +102,9 @@ func Run(ctx context.Context, opts Options, stdout io.Writer) (bool, error) {
 		LookupHost: func(ctx context.Context, host string) ([]string, error) {
 			return net.DefaultResolver.LookupHost(ctx, host)
 		},
+		LookupSRV: func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+			return net.DefaultResolver.LookupSRV(ctx, service, proto, name)
+		},
 		Stdout: stdout,
 	}
 
@@ -130,6 +134,7 @@ func Run(ctx context.Context, opts Options, stdout io.Writer) (bool, error) {
 			allPassed = false
 		}
 	}
+	writeResult(stdout, checker.CheckDNSSRV(ctx, email, domain), true)
 
 	if allPassed {
 		fmt.Fprintln(stdout, "\nSummary: PASS")
@@ -234,6 +239,184 @@ func (c Checker) CheckApple(ctx context.Context, email, domain string) Result {
 	return result
 }
 
+func (c Checker) CheckDNSSRV(ctx context.Context, email, domain string) Result {
+	result := Result{Name: "DNS SRV", Passed: true}
+
+	settings, err := c.discoverMailSettings(ctx, email, domain)
+	if err != nil {
+		result.Details = append(result.Details, "could not derive expected IMAP/SMTP SRV records from Thunderbird Autoconfig: "+err.Error())
+		result.Details = append(result.Details, "Suggestion: rerun after Thunderbird Autoconfig is reachable, or verify RFC 6186 SRV records manually.")
+		return result
+	}
+
+	expected := []expectedSRV{
+		{
+			Service: "_autodiscover._tcp",
+			Name:    "autodiscover",
+			Proto:   "tcp",
+			Domain:  domain,
+			Target:  "autodiscover." + domain + ".",
+			Port:    443,
+			Weight:  0,
+			Comment: "Outlook Autodiscover service discovery",
+		},
+	}
+
+	switch strings.ToLower(settings.Incoming.Type) {
+	case "imap":
+		if strings.EqualFold(settings.Incoming.SocketType, "SSL") || strings.EqualFold(settings.Incoming.SocketType, "TLS") || strings.EqualFold(settings.Incoming.SocketType, "SSL/TLS") {
+			expected = append(expected, expectedSRV{
+				Service: "_imaps._tcp",
+				Name:    "imaps",
+				Proto:   "tcp",
+				Domain:  domain,
+				Target:  dnsTarget(settings.Incoming.Hostname),
+				Port:    settings.Incoming.Port,
+				Weight:  1,
+				Comment: "RFC 6186 implicit-TLS IMAP discovery",
+			})
+		} else {
+			expected = append(expected, expectedSRV{
+				Service: "_imap._tcp",
+				Name:    "imap",
+				Proto:   "tcp",
+				Domain:  domain,
+				Target:  dnsTarget(settings.Incoming.Hostname),
+				Port:    settings.Incoming.Port,
+				Weight:  1,
+				Comment: "RFC 6186 IMAP discovery",
+			})
+		}
+	case "pop", "pop3":
+		service := "pop3"
+		label := "_pop3._tcp"
+		comment := "RFC 6186 POP3 discovery"
+		if strings.EqualFold(settings.Incoming.SocketType, "SSL") || strings.EqualFold(settings.Incoming.SocketType, "TLS") || strings.EqualFold(settings.Incoming.SocketType, "SSL/TLS") {
+			service = "pop3s"
+			label = "_pop3s._tcp"
+			comment = "RFC 6186 implicit-TLS POP3 discovery"
+		}
+		expected = append(expected, expectedSRV{
+			Service: label,
+			Name:    service,
+			Proto:   "tcp",
+			Domain:  domain,
+			Target:  dnsTarget(settings.Incoming.Hostname),
+			Port:    settings.Incoming.Port,
+			Weight:  1,
+			Comment: comment,
+		})
+	}
+
+	if strings.EqualFold(settings.Outgoing.Type, "smtp") {
+		expected = append(expected, expectedSRV{
+			Service: "_submission._tcp",
+			Name:    "submission",
+			Proto:   "tcp",
+			Domain:  domain,
+			Target:  dnsTarget(settings.Outgoing.Hostname),
+			Port:    settings.Outgoing.Port,
+			Weight:  1,
+			Comment: "RFC 6186 message submission discovery",
+		})
+	}
+
+	var missing []expectedSRV
+	for _, want := range expected {
+		detail, ok := c.checkSRV(ctx, want)
+		result.Details = append(result.Details, detail)
+		if !ok {
+			missing = append(missing, want)
+		}
+	}
+	if len(missing) > 0 {
+		result.Details = append(result.Details, "suggested DNS records:")
+		for _, want := range missing {
+			result.Details = append(result.Details, fmt.Sprintf("%s.%s. 3600 IN SRV 0 %d %d %s", want.Service, domain, want.Weight, want.Port, want.Target))
+		}
+		result.Details = append(result.Details, "optional explicit not-offered records when POP/plain IMAP are intentionally unsupported:")
+		result.Details = append(result.Details, fmt.Sprintf("_imap._tcp.%s. 3600 IN SRV 0 0 0 .", domain))
+		result.Details = append(result.Details, fmt.Sprintf("_pop3._tcp.%s. 3600 IN SRV 0 0 0 .", domain))
+		result.Details = append(result.Details, fmt.Sprintf("_pop3s._tcp.%s. 3600 IN SRV 0 0 0 .", domain))
+	}
+	return result
+}
+
+func (c Checker) discoverMailSettings(ctx context.Context, email, domain string) (mailSettings, error) {
+	autoconfigHost := "autoconfig." + domain
+	urls := []string{
+		withEmailQuery("https://"+autoconfigHost+"/mail/config-v1.1.xml", email),
+		withEmailQuery("https://"+domain+"/.well-known/autoconfig/mail/config-v1.1.xml", email),
+	}
+	var lastErr error
+	for _, target := range urls {
+		attempt := c.fetch(ctx, http.MethodGet, target, "", nil)
+		if attempt.err != nil {
+			lastErr = attempt.err
+			continue
+		}
+		settings, err := parseThunderbirdSettings(attempt.body, domain)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		return settings, nil
+	}
+	if lastErr == nil {
+		lastErr = errors.New("no Thunderbird Autoconfig URL was attempted")
+	}
+	return mailSettings{}, lastErr
+}
+
+func (c Checker) checkSRV(ctx context.Context, want expectedSRV) (string, bool) {
+	_, records, err := c.lookupSRV(ctx, want.Name, want.Proto, want.Domain)
+	if err != nil {
+		return fmt.Sprintf("%s.%s: missing (%s)", want.Service, want.Domain, want.Comment), false
+	}
+	for _, record := range records {
+		target := dnsTarget(record.Target)
+		if record.Port == want.Port && strings.EqualFold(target, want.Target) {
+			return fmt.Sprintf("%s.%s: %d %d %d %s", want.Service, want.Domain, record.Priority, record.Weight, record.Port, dnsTarget(record.Target)), true
+		}
+	}
+	var got []string
+	for _, record := range records {
+		got = append(got, fmt.Sprintf("%d %d %d %s", record.Priority, record.Weight, record.Port, dnsTarget(record.Target)))
+	}
+	sort.Strings(got)
+	return fmt.Sprintf("%s.%s: unexpected value %s; expected port %d target %s", want.Service, want.Domain, strings.Join(got, "; "), want.Port, want.Target), false
+}
+
+func (c Checker) lookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+	if c.LookupSRV != nil {
+		return c.LookupSRV(ctx, service, proto, name)
+	}
+	return net.DefaultResolver.LookupSRV(ctx, service, proto, name)
+}
+
+type expectedSRV struct {
+	Service string
+	Name    string
+	Proto   string
+	Domain  string
+	Target  string
+	Port    uint16
+	Weight  uint16
+	Comment string
+}
+
+type mailSettings struct {
+	Incoming mailServerSettings
+	Outgoing mailServerSettings
+}
+
+type mailServerSettings struct {
+	Type       string
+	Hostname   string
+	Port       uint16
+	SocketType string
+}
+
 func (c Checker) describeDNS(ctx context.Context, host string) []string {
 	addrs, err := c.lookup(ctx, host)
 	if err != nil {
@@ -319,6 +502,12 @@ func (a fetchAttempt) problem(prefix string) string {
 }
 
 func validateThunderbird(body []byte, expectedDomain string) error {
+	_, err := parseThunderbirdSettings(body, expectedDomain)
+	return err
+}
+
+func parseThunderbirdSettings(body []byte, expectedDomain string) (mailSettings, error) {
+	var settings mailSettings
 	foundDomain := false
 	incoming := false
 	outgoing := false
@@ -329,7 +518,7 @@ func validateThunderbird(body []byte, expectedDomain string) error {
 			break
 		}
 		if err != nil {
-			return err
+			return mailSettings{}, err
 		}
 		start, ok := token.(xml.StartElement)
 		if !ok {
@@ -339,24 +528,81 @@ func validateThunderbird(body []byte, expectedDomain string) error {
 		case "domain":
 			var value string
 			if err := decoder.DecodeElement(&value, &start); err != nil {
-				return err
+				return mailSettings{}, err
 			}
 			if strings.EqualFold(strings.TrimSpace(value), expectedDomain) {
 				foundDomain = true
 			}
 		case "incomingServer":
+			server, err := decodeThunderbirdServer(decoder, start)
+			if err != nil {
+				return mailSettings{}, err
+			}
+			settings.Incoming = server
 			incoming = true
 		case "outgoingServer":
+			server, err := decodeThunderbirdServer(decoder, start)
+			if err != nil {
+				return mailSettings{}, err
+			}
+			settings.Outgoing = server
 			outgoing = true
 		}
 	}
 	if !foundDomain {
-		return fmt.Errorf("expected domain %q not found", expectedDomain)
+		return mailSettings{}, fmt.Errorf("expected domain %q not found", expectedDomain)
 	}
 	if !incoming || !outgoing {
-		return errors.New("incoming and outgoing server sections are required")
+		return mailSettings{}, errors.New("incoming and outgoing server sections are required")
 	}
-	return nil
+	if settings.Incoming.Hostname == "" || settings.Incoming.Port == 0 || settings.Outgoing.Hostname == "" || settings.Outgoing.Port == 0 {
+		return mailSettings{}, errors.New("incoming and outgoing hostnames and ports are required")
+	}
+	return settings, nil
+}
+
+func decodeThunderbirdServer(decoder *xml.Decoder, start xml.StartElement) (mailServerSettings, error) {
+	var server mailServerSettings
+	for _, attr := range start.Attr {
+		if attr.Name.Local == "type" {
+			server.Type = strings.TrimSpace(attr.Value)
+		}
+	}
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			return server, nil
+		}
+		if err != nil {
+			return server, err
+		}
+		switch token := token.(type) {
+		case xml.EndElement:
+			if token.Name.Local == start.Name.Local {
+				return server, nil
+			}
+		case xml.StartElement:
+			var value string
+			if err := decoder.DecodeElement(&value, &token); err != nil {
+				return server, err
+			}
+			switch token.Name.Local {
+			case "hostname":
+				server.Hostname = strings.TrimSpace(value)
+			case "port":
+				var port uint64
+				if _, err := fmt.Sscanf(strings.TrimSpace(value), "%d", &port); err != nil {
+					return server, fmt.Errorf("invalid port %q", value)
+				}
+				if port > 65535 {
+					return server, fmt.Errorf("invalid port %q", value)
+				}
+				server.Port = uint16(port)
+			case "socketType":
+				server.SocketType = strings.TrimSpace(value)
+			}
+		}
+	}
 }
 
 func validateAutodiscover(body []byte) error {
@@ -477,6 +723,14 @@ func withEmailQuery(rawURL, email string) string {
 	query.Set("emailaddress", email)
 	parsed.RawQuery = query.Encode()
 	return parsed.String()
+}
+
+func dnsTarget(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "." {
+		return value
+	}
+	return strings.TrimRight(value, ".") + "."
 }
 
 func autodiscoverRequest(email string) string {

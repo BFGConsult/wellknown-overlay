@@ -7,12 +7,13 @@ means the behavior has been manually verified in that client.
 
 | Software | Mechanism | Support | Tested In Software |
 |---|---|---|---|
-| Thunderbird desktop | Thunderbird Autoconfig | Yes | No |
+| Thunderbird desktop | Thunderbird Autoconfig | Yes | Yes |
 | Thunderbird Android / K-9 Mail | Thunderbird Autoconfig | Yes | No |
 | FairEmail Android | Thunderbird Autoconfig | Probable | No |
-| Outlook desktop | Outlook Autodiscover | Yes | No |
+| Outlook desktop | Outlook Autodiscover | Yes | Yes |
 | Outlook mobile | Outlook Autodiscover | Probable | No |
-| Apple Mail macOS | Apple mobileconfig | Yes | No |
-| Apple Mail iOS / iPadOS | Apple mobileconfig | Yes | No |
+| Apple Mail macOS add-account wizard | Unknown / Apple proprietary discovery | No | Yes |
+| Apple Mail macOS configuration profile | Apple mobileconfig | Yes | Yes |
+| Apple Mail iOS / iPadOS configuration profile | Apple mobileconfig | Probable | No |
 | Samsung Email Android | Outlook Autodiscover or manual IMAP | Probable | No |
 | Gmail Android | Manual IMAP / provider-specific flows | No | No |

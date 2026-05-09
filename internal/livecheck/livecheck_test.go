@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -130,11 +131,69 @@ func TestCheckApplePassesForMobileconfig(t *testing.T) {
 	}
 }
 
+func TestCheckDNSSRVSuggestsMissingRecords(t *testing.T) {
+	checker := testChecker(map[string]testResponse{
+		"https://example.org/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress=alice%40example.org": {
+			status: http.StatusOK,
+			body:   thunderbirdXML("example.org"),
+		},
+	})
+
+	result := checker.CheckDNSSRV(context.Background(), "alice@example.org", "example.org")
+	if !result.Passed {
+		t.Fatalf("DNS SRV warnings should not fail livecheck: %#v", result)
+	}
+	for _, want := range []string{
+		"_imaps._tcp.example.org: missing",
+		"_submission._tcp.example.org: missing",
+		"_autodiscover._tcp.example.org: missing",
+		"_imaps._tcp.example.org. 3600 IN SRV 0 1 993 mail.example.org.",
+		"_submission._tcp.example.org. 3600 IN SRV 0 1 587 mail.example.org.",
+		"_autodiscover._tcp.example.org. 3600 IN SRV 0 0 443 autodiscover.example.org.",
+	} {
+		if !containsDetail(result.Details, want) {
+			t.Fatalf("expected detail %q in %#v", want, result.Details)
+		}
+	}
+}
+
+func TestCheckDNSSRVReportsExistingRecords(t *testing.T) {
+	checker := testChecker(map[string]testResponse{
+		"https://example.org/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress=alice%40example.org": {
+			status: http.StatusOK,
+			body:   thunderbirdXML("example.org"),
+		},
+	})
+	checker.LookupSRV = func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+		switch service {
+		case "autodiscover":
+			return "", []*net.SRV{{Target: "autodiscover.example.org.", Port: 443}}, nil
+		case "imaps":
+			return "", []*net.SRV{{Target: "mail.example.org.", Port: 993}}, nil
+		case "submission":
+			return "", []*net.SRV{{Target: "mail.example.org.", Port: 587}}, nil
+		default:
+			return "", nil, errors.New("unexpected SRV lookup")
+		}
+	}
+
+	result := checker.CheckDNSSRV(context.Background(), "alice@example.org", "example.org")
+	if !result.Passed {
+		t.Fatalf("DNS SRV check should pass as warning-only: %#v", result)
+	}
+	if containsDetail(result.Details, "suggested DNS records") {
+		t.Fatalf("did not expect suggestions when SRV records exist: %#v", result.Details)
+	}
+}
+
 func testChecker(responses map[string]testResponse) Checker {
 	return Checker{
 		HTTPClient: &http.Client{Transport: fakeTransport{responses: responses}},
 		LookupHost: func(ctx context.Context, host string) ([]string, error) {
 			return nil, errors.New("no such host")
+		},
+		LookupSRV: func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+			return "", nil, errors.New("no such host")
 		},
 	}
 }
@@ -174,8 +233,16 @@ func thunderbirdXML(domain string) string {
 <clientConfig version="1.1">
   <emailProvider id="` + domain + `">
     <domain>` + domain + `</domain>
-    <incomingServer type="imap"></incomingServer>
-    <outgoingServer type="smtp"></outgoingServer>
+    <incomingServer type="imap">
+      <hostname>mail.example.org</hostname>
+      <port>993</port>
+      <socketType>SSL</socketType>
+    </incomingServer>
+    <outgoingServer type="smtp">
+      <hostname>mail.example.org</hostname>
+      <port>587</port>
+      <socketType>STARTTLS</socketType>
+    </outgoingServer>
   </emailProvider>
 </clientConfig>`
 }
