@@ -151,10 +151,7 @@ func MailAccountConfigFromEnv() (overlay.Config, error) {
 	}
 
 	displayName := EnvOrDefault("MAIL_DISPLAY_NAME", domain)
-	var manualSetup *overlay.MailManualSetupConfig
-	if url := os.Getenv("MAIL_SETUP_URL"); url != "" {
-		manualSetup = &overlay.MailManualSetupConfig{URL: url}
-	}
+	manualSetup := MailManualSetupConfigFromEnv()
 	cfg := overlay.Config{
 		MailAccount: &overlay.MailAccount{
 			ManualSetup: manualSetup,
@@ -186,6 +183,27 @@ func MailAccountConfigFromEnv() (overlay.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func MailManualSetupConfigFromEnv() *overlay.MailManualSetupConfig {
+	manualSetup := overlay.MailManualSetupConfig{
+		URL: os.Getenv("MAIL_SETUP_URL"),
+	}
+	for i := 1; i <= 20; i++ {
+		title := os.Getenv(fmt.Sprintf("MAIL_SETUP_EXTRA_SECTION_%d_TITLE", i))
+		body := os.Getenv(fmt.Sprintf("MAIL_SETUP_EXTRA_SECTION_%d_BODY_MARKDOWN", i))
+		if title == "" && body == "" {
+			continue
+		}
+		manualSetup.ExtraSections = append(manualSetup.ExtraSections, overlay.MailManualSetupSection{
+			Title:        title,
+			BodyMarkdown: body,
+		})
+	}
+	if manualSetup.URL == "" && len(manualSetup.ExtraSections) == 0 {
+		return nil
+	}
+	return &manualSetup
 }
 
 func RequiredEnv(name string) (string, error) {

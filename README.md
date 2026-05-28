@@ -65,7 +65,13 @@ truth:
 {
   "mail_account": {
     "manual_setup": {
-      "url": "https://autoconfig.efn.no/mail/setup"
+      "url": "https://autoconfig.efn.no/mail/setup",
+      "extra_sections": [
+        {
+          "title": "Password changes",
+          "body_markdown": "Change your password in the [KristShell email administration](https://www.kristshell.net/epostadmin/users/login.php)."
+        }
+      ]
     },
     "profiles": [
       {
@@ -144,6 +150,11 @@ stored as gettext PO files such as `translations/nb.po` and selected with
 `{{incoming.hostname}}`, and `{{outgoing.username}}` on the server. If no
 `emailaddress` query parameter is provided, the page uses human-readable
 descriptors such as `your full email address`.
+
+Deployments can append site-specific help to `/mail/setup` with
+`manual_setup.extra_sections`. Each section has a plain-text `title` and a
+`body_markdown` value. The rendered Markdown supports paragraphs, links, and
+simple unordered lists.
 
 The module also serves an unsigned Apple configuration profile:
 
@@ -289,6 +300,9 @@ Common `MAIL_*` variables:
   unless `MAIL_INCOMING_USERNAME` or `MAIL_OUTGOING_USERNAME` are set.
 - `MAIL_SETUP_URL` is optional. When set, generated Thunderbird Autoconfig XML
   links to that human-readable setup page.
+- `MAIL_SETUP_EXTRA_SECTION_1_TITLE` and
+  `MAIL_SETUP_EXTRA_SECTION_1_BODY_MARKDOWN` append a site-specific section to
+  `/mail/setup`. Increase the number for additional sections, up to 20.
 
 If gateway-only variables such as `BACKEND_URL` are set on the core image, the
 Docker entrypoint helper warns that they only affect the gateway image. The

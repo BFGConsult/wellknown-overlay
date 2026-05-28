@@ -34,6 +34,9 @@ func TestPrepareOverlayConfigGeneratesMailAccountFromEnv(t *testing.T) {
 		`"username": "%EMAILADDRESS%"`,
 		`"manual_setup"`,
 		`"url": "https://autoconfig.example.org/mail/setup"`,
+		`"extra_sections"`,
+		`"title": "Password changes"`,
+		`"body_markdown": "Change your password in the [mail admin](https://admin.example.org/)."`,
 	} {
 		if !bytes.Contains(body, []byte(want)) {
 			t.Fatalf("generated config does not contain %q:\n%s", want, body)
@@ -143,4 +146,6 @@ func setMailEnv(t *testing.T) {
 	t.Setenv("MAIL_INCOMING_HOST", "imap.example.org")
 	t.Setenv("MAIL_OUTGOING_HOST", "smtp.example.org")
 	t.Setenv("MAIL_SETUP_URL", "https://autoconfig.example.org/mail/setup")
+	t.Setenv("MAIL_SETUP_EXTRA_SECTION_1_TITLE", "Password changes")
+	t.Setenv("MAIL_SETUP_EXTRA_SECTION_1_BODY_MARKDOWN", "Change your password in the [mail admin](https://admin.example.org/).")
 }

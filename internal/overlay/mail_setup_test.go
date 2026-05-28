@@ -7,7 +7,7 @@ import (
 )
 
 func TestRenderMailSetupUsesEnglishTemplateAndEmailAddress(t *testing.T) {
-	body, lang, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), "bfg@efn.no", "en")
+	body, lang, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "bfg@efn.no", "en")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestRenderMailSetupUsesEnglishTemplateAndEmailAddress(t *testing.T) {
 }
 
 func TestRenderMailSetupUsesHumanPlaceholdersWithoutEmailAddress(t *testing.T) {
-	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), "", "en")
+	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "", "en")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestRenderMailSetupUsesHumanPlaceholdersWithoutEmailAddress(t *testing.T) {
 }
 
 func TestRenderMailSetupUsesNorwegianPOTranslation(t *testing.T) {
-	body, lang, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), "", "nb-NO")
+	body, lang, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "", "nb-NO")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestRenderMailSetupAllowsRootTemplateOverride(t *testing.T) {
 		"mail-setup.md": {Data: []byte("Custom {{display_name}} {{incoming.hostname}}\n")},
 	}
 
-	body, _, err := RenderMailSetup(files, testMailAccountProfile("default", "EFN"), "", "en")
+	body, _, err := RenderMailSetup(files, testMailAccountProfile("default", "EFN"), nil, "", "en")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,5 +78,32 @@ func TestRenderMailSetupAllowsRootTemplateOverride(t *testing.T) {
 	got := string(body)
 	if !strings.Contains(got, "<p>Custom EFN login.kristshell.net</p>") {
 		t.Fatalf("body = %q", got)
+	}
+}
+
+func TestRenderMailSetupAppendsExtraSectionsWithMarkdownLinksAndLists(t *testing.T) {
+	manualSetup := &MailManualSetupConfig{
+		ExtraSections: []MailManualSetupSection{
+			{
+				Title:        "Password changes",
+				BodyMarkdown: "Change your password in the [KristShell email administration](https://www.kristshell.net/epostadmin/users/login.php).\n\n- Use your full email address as the username.",
+			},
+		},
+	}
+
+	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), manualSetup, "bfg@efn.no", "en")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := string(body)
+	for _, want := range []string{
+		"<h2>Password changes</h2>",
+		`<a href="https://www.kristshell.net/epostadmin/users/login.php">KristShell email administration</a>`,
+		"<li>Use your full email address as the username.</li>",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("body does not contain %q:\n%s", want, got)
+		}
 	}
 }

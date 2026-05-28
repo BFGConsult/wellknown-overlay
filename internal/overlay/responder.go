@@ -63,7 +63,7 @@ func (r *Responder) RenderRequestBody(routePath, rawQuery string, body []byte) (
 		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
 		lang := queryValueAny(rawQuery, "lang", "locale")
 		profile := r.mailAccount.SelectProfile(emailAddress)
-		body, _, err := RenderMailSetup(r.files, profile, emailAddress, lang)
+		body, _, err := RenderMailSetup(r.files, profile, r.mailAccount.ManualSetup, emailAddress, lang)
 		if err != nil {
 			return Response{}, err
 		}

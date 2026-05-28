@@ -16,7 +16,7 @@ const mailSetupTemplatePath = "templates/mail-setup.md"
 //go:embed templates/mail-setup.md translations/*.po
 var embeddedMailSetupFS embed.FS
 
-func RenderMailSetup(files fs.FS, cfg MailAccountProfile, emailAddress, lang string) ([]byte, string, error) {
+func RenderMailSetup(files fs.FS, cfg MailAccountProfile, manualSetup *MailManualSetupConfig, emailAddress, lang string) ([]byte, string, error) {
 	lang = normalizeLanguage(lang)
 	template, err := mailSetupTemplate(files)
 	if err != nil {
@@ -32,7 +32,9 @@ func RenderMailSetup(files fs.FS, cfg MailAccountProfile, emailAddress, lang str
 		}
 	}
 
-	body := markdownDocumentToHTML(renderMailSetupTemplate(template, cfg, emailAddress, lang), lang)
+	rendered := renderMailSetupTemplate(template, cfg, emailAddress, lang)
+	rendered = appendManualSetupSections(rendered, manualSetup)
+	body := markdownDocumentToHTML(rendered, lang)
 	return []byte(body), lang, nil
 }
 
@@ -106,6 +108,24 @@ func renderMailSetupTemplate(template string, cfg MailAccountProfile, emailAddre
 		rendered = strings.ReplaceAll(rendered, "{{"+key+"}}", value)
 	}
 	return rendered
+}
+
+func appendManualSetupSections(markdown string, manualSetup *MailManualSetupConfig) string {
+	if manualSetup == nil || len(manualSetup.ExtraSections) == 0 {
+		return markdown
+	}
+
+	var out strings.Builder
+	out.WriteString(strings.TrimRight(markdown, "\n"))
+	out.WriteString("\n")
+	for _, section := range manualSetup.ExtraSections {
+		out.WriteString("\n## ")
+		out.WriteString(strings.TrimSpace(section.Title))
+		out.WriteString("\n\n")
+		out.WriteString(strings.TrimSpace(section.BodyMarkdown))
+		out.WriteString("\n")
+	}
+	return out.String()
 }
 
 func substituteManualMailVariables(value, emailAddress, lang string) string {
@@ -242,6 +262,19 @@ func markdownDocumentToHTML(markdown, lang string) string {
 			}
 			body.WriteString(markdownTableToHTML(tableLines))
 			i = next
+		case strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* "):
+			next := i
+			var items []string
+			for next < len(lines) {
+				nextLine := strings.TrimSpace(lines[next])
+				if !strings.HasPrefix(nextLine, "- ") && !strings.HasPrefix(nextLine, "* ") {
+					break
+				}
+				items = append(items, strings.TrimSpace(nextLine[2:]))
+				next++
+			}
+			body.WriteString(markdownListToHTML(items))
+			i = next
 		default:
 			next := i
 			var paragraph []string
@@ -254,7 +287,7 @@ func markdownDocumentToHTML(markdown, lang string) string {
 				next++
 			}
 			body.WriteString("<p>")
-			body.WriteString(html.EscapeString(strings.Join(paragraph, " ")))
+			body.WriteString(markdownInlineToHTML(strings.Join(paragraph, " ")))
 			body.WriteString("</p>\n")
 			i = next
 		}
@@ -284,6 +317,63 @@ func markdownDocumentToHTML(markdown, lang string) string {
 </body>
 </html>
 `
+}
+
+func markdownListToHTML(items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+	var out strings.Builder
+	out.WriteString("<ul>\n")
+	for _, item := range items {
+		out.WriteString("<li>")
+		out.WriteString(markdownInlineToHTML(item))
+		out.WriteString("</li>\n")
+	}
+	out.WriteString("</ul>\n")
+	return out.String()
+}
+
+func markdownInlineToHTML(value string) string {
+	var out strings.Builder
+	for {
+		before, rest, ok := strings.Cut(value, "[")
+		if !ok {
+			out.WriteString(html.EscapeString(value))
+			break
+		}
+		label, afterLabel, ok := strings.Cut(rest, "](")
+		if !ok {
+			out.WriteString(html.EscapeString(before + "[" + rest))
+			break
+		}
+		target, afterTarget, ok := strings.Cut(afterLabel, ")")
+		if !ok {
+			out.WriteString(html.EscapeString(before + "[" + rest))
+			break
+		}
+		out.WriteString(html.EscapeString(before))
+		if safeMarkdownLinkTarget(target) {
+			out.WriteString(`<a href="`)
+			out.WriteString(html.EscapeString(target))
+			out.WriteString(`">`)
+			out.WriteString(html.EscapeString(label))
+			out.WriteString("</a>")
+		} else {
+			out.WriteString(html.EscapeString(label))
+		}
+		value = afterTarget
+	}
+	return out.String()
+}
+
+func safeMarkdownLinkTarget(target string) bool {
+	target = strings.TrimSpace(strings.ToLower(target))
+	return strings.HasPrefix(target, "https://") ||
+		strings.HasPrefix(target, "http://") ||
+		strings.HasPrefix(target, "mailto:") ||
+		strings.HasPrefix(target, "/") ||
+		strings.HasPrefix(target, "#")
 }
 
 func markdownTableToHTML(lines []string) string {

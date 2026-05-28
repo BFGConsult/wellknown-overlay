@@ -92,6 +92,20 @@ func TestConfigValidateRejectsUnsupportedProfileGlobSyntax(t *testing.T) {
 	}
 }
 
+func TestConfigValidateRejectsIncompleteManualSetupExtraSection(t *testing.T) {
+	account := testMailAccount()
+	account.ManualSetup = &MailManualSetupConfig{
+		ExtraSections: []MailManualSetupSection{
+			{Title: "Password changes"},
+		},
+	}
+
+	cfg := Config{MailAccount: account}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected incomplete manual setup extra section to be rejected")
+	}
+}
+
 func testMailAccount() *MailAccount {
 	return &MailAccount{
 		Profiles: []MailAccountProfile{

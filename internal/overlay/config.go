@@ -26,7 +26,13 @@ type MailAccount struct {
 }
 
 type MailManualSetupConfig struct {
-	URL string `json:"url,omitempty"`
+	URL           string                   `json:"url,omitempty"`
+	ExtraSections []MailManualSetupSection `json:"extra_sections,omitempty"`
+}
+
+type MailManualSetupSection struct {
+	Title        string `json:"title"`
+	BodyMarkdown string `json:"body_markdown"`
 }
 
 type MailAccountProfile struct {
@@ -161,6 +167,17 @@ func (cfg MailAccount) Validate() error {
 	}
 	if defaultCount != 1 {
 		return errors.New("mail_account.profiles must declare exactly one default profile")
+	}
+	if cfg.ManualSetup != nil {
+		for i, section := range cfg.ManualSetup.ExtraSections {
+			prefix := fmt.Sprintf("mail_account.manual_setup.extra_sections[%d]", i)
+			if strings.TrimSpace(section.Title) == "" {
+				return fmt.Errorf("%s.title is required", prefix)
+			}
+			if strings.TrimSpace(section.BodyMarkdown) == "" {
+				return fmt.Errorf("%s.body_markdown is required", prefix)
+			}
+		}
 	}
 
 	return nil
