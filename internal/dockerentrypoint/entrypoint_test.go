@@ -35,6 +35,7 @@ func TestPrepareOverlayConfigGeneratesMailAccountFromEnv(t *testing.T) {
 		`"manual_setup"`,
 		`"url": "https://autoconfig.example.org/mail/setup"`,
 		`"extra_sections"`,
+		`"lang": "en"`,
 		`"title": "Password changes"`,
 		`"body_markdown": "Change your password in the [mail admin](https://admin.example.org/)."`,
 	} {
@@ -146,6 +147,7 @@ func setMailEnv(t *testing.T) {
 	t.Setenv("MAIL_INCOMING_HOST", "imap.example.org")
 	t.Setenv("MAIL_OUTGOING_HOST", "smtp.example.org")
 	t.Setenv("MAIL_SETUP_URL", "https://autoconfig.example.org/mail/setup")
+	t.Setenv("MAIL_SETUP_EXTRA_SECTION_1_LANG", "en")
 	t.Setenv("MAIL_SETUP_EXTRA_SECTION_1_TITLE", "Password changes")
 	t.Setenv("MAIL_SETUP_EXTRA_SECTION_1_BODY_MARKDOWN", "Change your password in the [mail admin](https://admin.example.org/).")
 }

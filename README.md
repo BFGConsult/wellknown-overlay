@@ -68,6 +68,7 @@ truth:
       "url": "https://autoconfig.efn.no/mail/setup",
       "extra_sections": [
         {
+          "lang": "en",
           "title": "Password changes",
           "body_markdown": "Change your password in the [KristShell email administration](https://www.kristshell.net/epostadmin/users/login.php)."
         }
@@ -152,9 +153,10 @@ stored as gettext PO files such as `translations/nb.po` and selected with
 descriptors such as `your full email address`.
 
 Deployments can append site-specific help to `/mail/setup` with
-`manual_setup.extra_sections`. Each section has a plain-text `title` and a
-`body_markdown` value. The rendered Markdown supports paragraphs, links, and
-simple unordered lists.
+`manual_setup.extra_sections`. Each section has an optional `lang`, a
+plain-text `title`, and a `body_markdown` value. Untagged sections are shown for
+all languages; tagged sections are shown only when `?lang=` matches. The
+rendered Markdown supports paragraphs, links, and simple unordered lists.
 
 The module also serves an unsigned Apple configuration profile:
 
@@ -303,6 +305,8 @@ Common `MAIL_*` variables:
 - `MAIL_SETUP_EXTRA_SECTION_1_TITLE` and
   `MAIL_SETUP_EXTRA_SECTION_1_BODY_MARKDOWN` append a site-specific section to
   `/mail/setup`. Increase the number for additional sections, up to 20.
+- `MAIL_SETUP_EXTRA_SECTION_1_LANG` optionally limits that section to a
+  normalized language code such as `en` or `nb`.
 
 If gateway-only variables such as `BACKEND_URL` are set on the core image, the
 Docker entrypoint helper warns that they only affect the gateway image. The

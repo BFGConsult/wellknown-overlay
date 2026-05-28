@@ -31,6 +31,7 @@ type MailManualSetupConfig struct {
 }
 
 type MailManualSetupSection struct {
+	Lang         string `json:"lang,omitempty"`
 	Title        string `json:"title"`
 	BodyMarkdown string `json:"body_markdown"`
 }

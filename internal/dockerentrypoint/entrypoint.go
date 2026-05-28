@@ -190,12 +190,14 @@ func MailManualSetupConfigFromEnv() *overlay.MailManualSetupConfig {
 		URL: os.Getenv("MAIL_SETUP_URL"),
 	}
 	for i := 1; i <= 20; i++ {
+		lang := os.Getenv(fmt.Sprintf("MAIL_SETUP_EXTRA_SECTION_%d_LANG", i))
 		title := os.Getenv(fmt.Sprintf("MAIL_SETUP_EXTRA_SECTION_%d_TITLE", i))
 		body := os.Getenv(fmt.Sprintf("MAIL_SETUP_EXTRA_SECTION_%d_BODY_MARKDOWN", i))
-		if title == "" && body == "" {
+		if lang == "" && title == "" && body == "" {
 			continue
 		}
 		manualSetup.ExtraSections = append(manualSetup.ExtraSections, overlay.MailManualSetupSection{
+			Lang:         lang,
 			Title:        title,
 			BodyMarkdown: body,
 		})

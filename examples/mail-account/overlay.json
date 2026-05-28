@@ -4,6 +4,7 @@
       "url": "https://autoconfig.example.org/mail/setup",
       "extra_sections": [
         {
+          "lang": "en",
           "title": "Password changes",
           "body_markdown": "Change your password in the [mail administration](https://admin.example.org/password)."
         }

@@ -33,7 +33,7 @@ func RenderMailSetup(files fs.FS, cfg MailAccountProfile, manualSetup *MailManua
 	}
 
 	rendered := renderMailSetupTemplate(template, cfg, emailAddress, lang)
-	rendered = appendManualSetupSections(rendered, manualSetup)
+	rendered = appendManualSetupSections(rendered, manualSetup, lang)
 	body := markdownDocumentToHTML(rendered, lang)
 	return []byte(body), lang, nil
 }
@@ -110,7 +110,7 @@ func renderMailSetupTemplate(template string, cfg MailAccountProfile, emailAddre
 	return rendered
 }
 
-func appendManualSetupSections(markdown string, manualSetup *MailManualSetupConfig) string {
+func appendManualSetupSections(markdown string, manualSetup *MailManualSetupConfig, lang string) string {
 	if manualSetup == nil || len(manualSetup.ExtraSections) == 0 {
 		return markdown
 	}
@@ -119,6 +119,9 @@ func appendManualSetupSections(markdown string, manualSetup *MailManualSetupConf
 	out.WriteString(strings.TrimRight(markdown, "\n"))
 	out.WriteString("\n")
 	for _, section := range manualSetup.ExtraSections {
+		if !manualSetupSectionMatchesLang(section, lang) {
+			continue
+		}
 		out.WriteString("\n## ")
 		out.WriteString(strings.TrimSpace(section.Title))
 		out.WriteString("\n\n")
@@ -126,6 +129,14 @@ func appendManualSetupSections(markdown string, manualSetup *MailManualSetupConf
 		out.WriteString("\n")
 	}
 	return out.String()
+}
+
+func manualSetupSectionMatchesLang(section MailManualSetupSection, lang string) bool {
+	sectionLang := normalizeLanguage(section.Lang)
+	if sectionLang == "en" && strings.TrimSpace(section.Lang) == "" {
+		return true
+	}
+	return sectionLang == normalizeLanguage(lang)
 }
 
 func substituteManualMailVariables(value, emailAddress, lang string) string {
