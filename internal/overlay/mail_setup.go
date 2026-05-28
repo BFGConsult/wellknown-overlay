@@ -2,10 +2,15 @@ package overlay
 
 import (
 	"bufio"
+	"bytes"
 	"embed"
 	"errors"
 	"fmt"
 	"html"
+	"image"
+	"image/color"
+	"image/draw"
+	"image/png"
 	"io/fs"
 	"strconv"
 	"strings"
@@ -16,7 +21,7 @@ const mailSetupTemplatePath = "templates/mail-setup.md"
 //go:embed templates/mail-setup.md translations/*.po
 var embeddedMailSetupFS embed.FS
 
-func RenderMailSetup(files fs.FS, cfg MailAccountProfile, manualSetup *MailManualSetupConfig, emailAddress, lang string) ([]byte, string, error) {
+func RenderMailSetup(files fs.FS, cfg MailAccountProfile, manualSetup *MailManualSetupConfig, emailAddress, lang, socialImageURL string) ([]byte, string, error) {
 	lang = normalizeLanguage(lang)
 	template, err := mailSetupTemplate(files)
 	if err != nil {
@@ -34,7 +39,7 @@ func RenderMailSetup(files fs.FS, cfg MailAccountProfile, manualSetup *MailManua
 
 	rendered := renderMailSetupTemplate(template, cfg, emailAddress, lang)
 	rendered = appendManualSetupSections(rendered, manualSetup, lang)
-	body := markdownDocumentToHTML(rendered, lang)
+	body := markdownDocumentToHTML(rendered, lang, socialImageURL)
 	return []byte(body), lang, nil
 }
 
@@ -244,7 +249,7 @@ func parsePOTranslations(data string) (map[string]string, error) {
 	return translations, nil
 }
 
-func markdownDocumentToHTML(markdown, lang string) string {
+func markdownDocumentToHTML(markdown, lang, socialImageURL string) string {
 	var body strings.Builder
 	title := "Email setup"
 	lines := strings.Split(markdown, "\n")
@@ -316,10 +321,12 @@ func markdownDocumentToHTML(markdown, lang string) string {
   <meta property="og:type" content="website">
   <meta property="og:title" content="` + html.EscapeString(title) + `">
   <meta property="og:description" content="` + html.EscapeString(description) + `">
+  <meta property="og:image" content="` + html.EscapeString(socialImageURL) + `">
   <meta property="og:locale" content="` + html.EscapeString(locale) + `">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="` + html.EscapeString(title) + `">
   <meta name="twitter:description" content="` + html.EscapeString(description) + `">
+  <meta name="twitter:image" content="` + html.EscapeString(socialImageURL) + `">
   <style>
     :root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1a1d24; background: #f7f8fb; }
     body { margin: 0; padding: 32px; }
@@ -338,6 +345,32 @@ func markdownDocumentToHTML(markdown, lang string) string {
 </body>
 </html>
 `
+}
+
+func RenderMailSetupSocialImage() ([]byte, error) {
+	const (
+		width  = 1200
+		height = 630
+	)
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	draw.Draw(img, img.Bounds(), &image.Uniform{C: color.RGBA{R: 247, G: 248, B: 251, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(0, 0, width, 118), &image.Uniform{C: color.RGBA{R: 24, G: 30, B: 42, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(0, 118, width, 128), &image.Uniform{C: color.RGBA{R: 53, G: 145, B: 255, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(96, 214, 1104, 504), &image.Uniform{C: color.RGBA{R: 255, G: 255, B: 255, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(96, 214, 1104, 220), &image.Uniform{C: color.RGBA{R: 215, G: 220, B: 229, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(96, 498, 1104, 504), &image.Uniform{C: color.RGBA{R: 215, G: 220, B: 229, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(96, 214, 102, 504), &image.Uniform{C: color.RGBA{R: 215, G: 220, B: 229, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(1098, 214, 1104, 504), &image.Uniform{C: color.RGBA{R: 215, G: 220, B: 229, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(160, 278, 1040, 326), &image.Uniform{C: color.RGBA{R: 24, G: 30, B: 42, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(160, 366, 850, 394), &image.Uniform{C: color.RGBA{R: 92, G: 105, B: 124, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(160, 416, 650, 444), &image.Uniform{C: color.RGBA{R: 92, G: 105, B: 124, A: 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(920, 356, 1040, 476), &image.Uniform{C: color.RGBA{R: 53, G: 145, B: 255, A: 255}}, image.Point{}, draw.Src)
+
+	var out bytes.Buffer
+	if err := png.Encode(&out, img); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 func mailSetupMetaDescription(lang string) string {

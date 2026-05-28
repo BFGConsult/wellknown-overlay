@@ -75,6 +75,48 @@ func TestHTTPHandlerAcceptsAutodiscoverPost(t *testing.T) {
 	}
 }
 
+func TestHTTPHandlerAddsAbsoluteSocialImageURL(t *testing.T) {
+	handler := NewHTTPHandler(NewResponder(Config{
+		MailAccount: testMailAccount(),
+	}, fstest.MapFS{}))
+
+	req := httptest.NewRequest(http.MethodGet, MailSetupPath+"?lang=nb", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set("X-Forwarded-Host", "autoconfig.example.org")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	want := `<meta property="og:image" content="https://autoconfig.example.org/mail/setup-og.png?lang=nb">`
+	if !strings.Contains(rec.Body.String(), want) {
+		t.Fatalf("body does not contain %q:\n%s", want, rec.Body.String())
+	}
+}
+
+func TestHTTPHandlerServesMailSetupSocialImage(t *testing.T) {
+	handler := NewHTTPHandler(NewResponder(Config{
+		MailAccount: testMailAccount(),
+	}, fstest.MapFS{}))
+
+	req := httptest.NewRequest(http.MethodGet, MailSetupImagePath, nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "image/png" {
+		t.Fatalf("content type = %q, want image/png", got)
+	}
+	if !bytes.HasPrefix(rec.Body.Bytes(), []byte("\x89PNG\r\n\x1a\n")) {
+		t.Fatalf("body does not look like PNG: %x", rec.Body.Bytes()[:8])
+	}
+}
+
 func TestHTTPHandlerServesHeadHealthCheckWithoutBody(t *testing.T) {
 	handler := NewHTTPHandler(NewResponder(Config{
 		Routes: []Route{{Path: "/declared", File: "declared.txt"}},

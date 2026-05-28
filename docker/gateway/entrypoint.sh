@@ -95,6 +95,10 @@ write_overlay_locations() {
         proxy_pass ${OVERLAY_UPSTREAM};
     }
 
+    location = /mail/setup-og.png {
+        proxy_pass ${OVERLAY_UPSTREAM};
+    }
+
     location = /Autodiscover/Autodiscover.xml {
         proxy_pass ${OVERLAY_UPSTREAM};
     }

@@ -46,6 +46,10 @@ func (r *Responder) RenderRequest(routePath, rawQuery string) (Response, error) 
 }
 
 func (r *Responder) RenderRequestBody(routePath, rawQuery string, body []byte) (Response, error) {
+	return r.RenderHTTPRequest(routePath, rawQuery, body, "")
+}
+
+func (r *Responder) RenderHTTPRequest(routePath, rawQuery string, body []byte, publicBaseURL string) (Response, error) {
 	if r.mailAccount != nil && isThunderbirdAutoconfigPath(routePath) {
 		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
 		profile := r.mailAccount.SelectProfile(emailAddress)
@@ -63,13 +67,24 @@ func (r *Responder) RenderRequestBody(routePath, rawQuery string, body []byte) (
 		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
 		lang := queryValueAny(rawQuery, "lang", "locale")
 		profile := r.mailAccount.SelectProfile(emailAddress)
-		body, _, err := RenderMailSetup(r.files, profile, r.mailAccount.ManualSetup, emailAddress, lang)
+		body, _, err := RenderMailSetup(r.files, profile, r.mailAccount.ManualSetup, emailAddress, lang, mailSetupImageURL(publicBaseURL, lang))
 		if err != nil {
 			return Response{}, err
 		}
 		return Response{
 			Status:      http.StatusOK,
 			ContentType: "text/html; charset=utf-8",
+			Body:        body,
+		}, nil
+	}
+	if r.mailAccount != nil && routePath == MailSetupImagePath {
+		body, err := RenderMailSetupSocialImage()
+		if err != nil {
+			return Response{}, err
+		}
+		return Response{
+			Status:      http.StatusOK,
+			ContentType: "image/png",
 			Body:        body,
 		}, nil
 	}
@@ -126,6 +141,15 @@ func (r *Responder) RenderRequestBody(routePath, rawQuery string, body []byte) (
 		ContentType: contentType,
 		Body:        body,
 	}, nil
+}
+
+func mailSetupImageURL(publicBaseURL, lang string) string {
+	if publicBaseURL == "" {
+		return MailSetupImagePath
+	}
+	query := url.Values{}
+	query.Set("lang", normalizeLanguage(lang))
+	return publicBaseURL + MailSetupImagePath + "?" + query.Encode()
 }
 
 func isThunderbirdAutoconfigPath(routePath string) bool {

@@ -11,6 +11,7 @@ const (
 	ThunderbirdAutoconfigWellKnownPath = "/.well-known/autoconfig/mail/config-v1.1.xml"
 	ThunderbirdAutoconfigLegacyPath    = "/mail/config-v1.1.xml"
 	MailSetupPath                      = "/mail/setup"
+	MailSetupImagePath                 = "/mail/setup-og.png"
 	AppleMobileconfigPath              = "/.well-known/mail/apple.mobileconfig"
 	AutodiscoverPath                   = "/Autodiscover/Autodiscover.xml"
 	defaultProfileMatch                = "default"
@@ -18,7 +19,7 @@ const (
 
 func MailAccountPaths() []string {
 	paths := ThunderbirdAutoconfigPaths()
-	paths = append(paths, MailSetupPath)
+	paths = append(paths, MailSetupPath, MailSetupImagePath)
 	paths = append(paths, AppleMobileconfigPath)
 	return append(paths, AutodiscoverPaths()...)
 }

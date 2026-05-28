@@ -36,7 +36,7 @@ func NewHTTPHandler(responder *Responder) http.Handler {
 			}
 		}
 
-		response, err := responder.RenderRequestBody(r.URL.Path, r.URL.RawQuery, body)
+		response, err := responder.RenderHTTPRequest(r.URL.Path, r.URL.RawQuery, body, publicBaseURL(r))
 		if errors.Is(err, ErrNotFound) {
 			http.NotFound(w, r)
 			return
@@ -53,4 +53,23 @@ func NewHTTPHandler(responder *Responder) http.Handler {
 		}
 		_, _ = w.Write(response.Body)
 	})
+}
+
+func publicBaseURL(r *http.Request) string {
+	proto := r.Header.Get("X-Forwarded-Proto")
+	if proto == "" {
+		if r.TLS != nil {
+			proto = "https"
+		} else {
+			proto = "http"
+		}
+	}
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	if host == "" {
+		return ""
+	}
+	return proto + "://" + host
 }

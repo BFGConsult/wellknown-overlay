@@ -162,6 +162,11 @@ The module also serves an unsigned Apple configuration profile:
 
 - `/.well-known/mail/apple.mobileconfig`
 
+The setup page includes OpenGraph and Twitter summary metadata and serves a
+built-in default social preview image:
+
+- `/mail/setup-og.png`
+
 Apple profiles should normally be requested with an email address so
 placeholders such as `%EMAILADDRESS%` can be filled:
 
