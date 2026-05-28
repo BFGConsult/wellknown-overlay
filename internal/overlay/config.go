@@ -27,7 +27,12 @@ type MailAccount struct {
 
 type MailManualSetupConfig struct {
 	URL           string                   `json:"url,omitempty"`
+	SharePreview  *MailSharePreviewConfig  `json:"share_preview,omitempty"`
 	ExtraSections []MailManualSetupSection `json:"extra_sections,omitempty"`
+}
+
+type MailSharePreviewConfig struct {
+	Enabled bool `json:"enabled,omitempty"`
 }
 
 type MailManualSetupSection struct {
@@ -105,7 +110,7 @@ func (cfg Config) Validate() error {
 	}
 
 	if cfg.MailAccount != nil {
-		for _, modulePath := range MailAccountPaths() {
+		for _, modulePath := range cfg.MailAccount.Paths() {
 			if _, ok := seen[modulePath]; ok {
 				return fmt.Errorf("mail_account route conflicts with static route %q", modulePath)
 			}
@@ -122,7 +127,7 @@ func (cfg Config) Validate() error {
 func (cfg Config) ModulePaths() []string {
 	var paths []string
 	if cfg.MailAccount != nil {
-		paths = append(paths, MailAccountPaths()...)
+		paths = append(paths, cfg.MailAccount.Paths()...)
 	}
 	return paths
 }

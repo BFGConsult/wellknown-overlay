@@ -34,6 +34,8 @@ func TestPrepareOverlayConfigGeneratesMailAccountFromEnv(t *testing.T) {
 		`"username": "%EMAILADDRESS%"`,
 		`"manual_setup"`,
 		`"url": "https://autoconfig.example.org/mail/setup"`,
+		`"share_preview"`,
+		`"enabled": true`,
 		`"extra_sections"`,
 		`"lang": "en"`,
 		`"title": "Password changes"`,
@@ -99,6 +101,24 @@ func TestCoreWarnsForGatewayOnlyEnv(t *testing.T) {
 	}
 }
 
+func TestEnvBoolAcceptsCommonTrueValues(t *testing.T) {
+	for _, value := range []string{"1", "t", "true", "y", "yes", "on", "TRUE"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("BOOL_TEST", value)
+			if !EnvBool("BOOL_TEST") {
+				t.Fatalf("EnvBool(%q) = false, want true", value)
+			}
+		})
+	}
+}
+
+func TestEnvBoolDefaultsFalse(t *testing.T) {
+	t.Setenv("BOOL_TEST", "no")
+	if EnvBool("BOOL_TEST") {
+		t.Fatal("EnvBool(no) = true, want false")
+	}
+}
+
 func TestRunCoreExecsOverlayServe(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "overlay.json")
@@ -147,6 +167,7 @@ func setMailEnv(t *testing.T) {
 	t.Setenv("MAIL_INCOMING_HOST", "imap.example.org")
 	t.Setenv("MAIL_OUTGOING_HOST", "smtp.example.org")
 	t.Setenv("MAIL_SETUP_URL", "https://autoconfig.example.org/mail/setup")
+	t.Setenv("MAIL_SETUP_SHARE_PREVIEW", "yes")
 	t.Setenv("MAIL_SETUP_EXTRA_SECTION_1_LANG", "en")
 	t.Setenv("MAIL_SETUP_EXTRA_SECTION_1_TITLE", "Password changes")
 	t.Setenv("MAIL_SETUP_EXTRA_SECTION_1_BODY_MARKDOWN", "Change your password in the [mail admin](https://admin.example.org/).")

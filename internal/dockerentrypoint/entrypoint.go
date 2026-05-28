@@ -189,6 +189,9 @@ func MailManualSetupConfigFromEnv() *overlay.MailManualSetupConfig {
 	manualSetup := overlay.MailManualSetupConfig{
 		URL: os.Getenv("MAIL_SETUP_URL"),
 	}
+	if EnvBool("MAIL_SETUP_SHARE_PREVIEW") {
+		manualSetup.SharePreview = &overlay.MailSharePreviewConfig{Enabled: true}
+	}
 	for i := 1; i <= 20; i++ {
 		lang := os.Getenv(fmt.Sprintf("MAIL_SETUP_EXTRA_SECTION_%d_LANG", i))
 		title := os.Getenv(fmt.Sprintf("MAIL_SETUP_EXTRA_SECTION_%d_TITLE", i))
@@ -202,10 +205,20 @@ func MailManualSetupConfigFromEnv() *overlay.MailManualSetupConfig {
 			BodyMarkdown: body,
 		})
 	}
-	if manualSetup.URL == "" && len(manualSetup.ExtraSections) == 0 {
+	if manualSetup.URL == "" && manualSetup.SharePreview == nil && len(manualSetup.ExtraSections) == 0 {
 		return nil
 	}
 	return &manualSetup
+}
+
+func EnvBool(name string) bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv(name)))
+	switch value {
+	case "1", "t", "true", "y", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func RequiredEnv(name string) (string, error) {

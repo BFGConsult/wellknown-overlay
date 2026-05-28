@@ -19,9 +19,17 @@ const (
 
 func MailAccountPaths() []string {
 	paths := ThunderbirdAutoconfigPaths()
-	paths = append(paths, MailSetupPath, MailSetupImagePath)
+	paths = append(paths, MailSetupPath)
 	paths = append(paths, AppleMobileconfigPath)
 	return append(paths, AutodiscoverPaths()...)
+}
+
+func (cfg MailAccount) Paths() []string {
+	paths := MailAccountPaths()
+	if cfg.SharePreviewEnabled() {
+		paths = append(paths, MailSetupImagePath)
+	}
+	return paths
 }
 
 func ThunderbirdAutoconfigPaths() []string {
@@ -79,6 +87,10 @@ func (cfg MailAccount) ManualSetupURL() string {
 		return ""
 	}
 	return cfg.ManualSetup.URL
+}
+
+func (cfg MailAccount) SharePreviewEnabled() bool {
+	return cfg.ManualSetup != nil && cfg.ManualSetup.SharePreview != nil && cfg.ManualSetup.SharePreview.Enabled
 }
 
 type profileMatchScore struct {

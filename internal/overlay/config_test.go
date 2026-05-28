@@ -122,6 +122,12 @@ func testMailAccountWithManualSetup() *MailAccount {
 	return account
 }
 
+func testMailAccountWithSharePreview() *MailAccount {
+	account := testMailAccountWithManualSetup()
+	account.ManualSetup.SharePreview = &MailSharePreviewConfig{Enabled: true}
+	return account
+}
+
 func testMailAccountProfile(match, displayName string) MailAccountProfile {
 	return MailAccountProfile{
 		Match:       match,

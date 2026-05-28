@@ -75,9 +75,9 @@ func TestHTTPHandlerAcceptsAutodiscoverPost(t *testing.T) {
 	}
 }
 
-func TestHTTPHandlerAddsAbsoluteSocialImageURL(t *testing.T) {
+func TestHTTPHandlerAddsAbsoluteSharePreviewImageURL(t *testing.T) {
 	handler := NewHTTPHandler(NewResponder(Config{
-		MailAccount: testMailAccount(),
+		MailAccount: testMailAccountWithSharePreview(),
 	}, fstest.MapFS{}))
 
 	req := httptest.NewRequest(http.MethodGet, MailSetupPath+"?lang=nb", nil)
@@ -96,9 +96,24 @@ func TestHTTPHandlerAddsAbsoluteSocialImageURL(t *testing.T) {
 	}
 }
 
-func TestHTTPHandlerServesMailSetupSocialImage(t *testing.T) {
+func TestHTTPHandlerDoesNotServeMailSetupSharePreviewImageByDefault(t *testing.T) {
 	handler := NewHTTPHandler(NewResponder(Config{
 		MailAccount: testMailAccount(),
+	}, fstest.MapFS{}))
+
+	req := httptest.NewRequest(http.MethodGet, MailSetupImagePath, nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestHTTPHandlerServesMailSetupSharePreviewImageWhenEnabled(t *testing.T) {
+	handler := NewHTTPHandler(NewResponder(Config{
+		MailAccount: testMailAccountWithSharePreview(),
 	}, fstest.MapFS{}))
 
 	req := httptest.NewRequest(http.MethodGet, MailSetupImagePath, nil)

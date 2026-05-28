@@ -21,7 +21,7 @@ const mailSetupTemplatePath = "templates/mail-setup.md"
 //go:embed templates/mail-setup.md translations/*.po
 var embeddedMailSetupFS embed.FS
 
-func RenderMailSetup(files fs.FS, cfg MailAccountProfile, manualSetup *MailManualSetupConfig, emailAddress, lang, socialImageURL string) ([]byte, string, error) {
+func RenderMailSetup(files fs.FS, cfg MailAccountProfile, manualSetup *MailManualSetupConfig, emailAddress, lang, sharePreviewImageURL string) ([]byte, string, error) {
 	lang = normalizeLanguage(lang)
 	template, err := mailSetupTemplate(files)
 	if err != nil {
@@ -39,7 +39,7 @@ func RenderMailSetup(files fs.FS, cfg MailAccountProfile, manualSetup *MailManua
 
 	rendered := renderMailSetupTemplate(template, cfg, emailAddress, lang)
 	rendered = appendManualSetupSections(rendered, manualSetup, lang)
-	body := markdownDocumentToHTML(rendered, lang, socialImageURL)
+	body := markdownDocumentToHTML(rendered, lang, sharePreviewImageURL)
 	return []byte(body), lang, nil
 }
 
@@ -249,7 +249,7 @@ func parsePOTranslations(data string) (map[string]string, error) {
 	return translations, nil
 }
 
-func markdownDocumentToHTML(markdown, lang, socialImageURL string) string {
+func markdownDocumentToHTML(markdown, lang, sharePreviewImageURL string) string {
 	var body strings.Builder
 	title := "Email setup"
 	lines := strings.Split(markdown, "\n")
@@ -309,7 +309,10 @@ func markdownDocumentToHTML(markdown, lang, socialImageURL string) string {
 		}
 	}
 	description := mailSetupMetaDescription(lang)
-	locale := openGraphLocale(lang)
+	sharePreviewTags := ""
+	if sharePreviewImageURL != "" {
+		sharePreviewTags = mailSetupSharePreviewTags(title, description, lang, sharePreviewImageURL)
+	}
 
 	return `<!doctype html>
 <html lang="` + html.EscapeString(lang) + `">
@@ -318,16 +321,7 @@ func markdownDocumentToHTML(markdown, lang, socialImageURL string) string {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>` + html.EscapeString(title) + `</title>
   <meta name="description" content="` + html.EscapeString(description) + `">
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="` + html.EscapeString(title) + `">
-  <meta property="og:description" content="` + html.EscapeString(description) + `">
-  <meta property="og:image" content="` + html.EscapeString(socialImageURL) + `">
-  <meta property="og:locale" content="` + html.EscapeString(locale) + `">
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="` + html.EscapeString(title) + `">
-  <meta name="twitter:description" content="` + html.EscapeString(description) + `">
-  <meta name="twitter:image" content="` + html.EscapeString(socialImageURL) + `">
-  <style>
+` + sharePreviewTags + `  <style>
     :root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1a1d24; background: #f7f8fb; }
     body { margin: 0; padding: 32px; }
     main { max-width: 760px; margin: 0 auto; padding: 32px; background: #fff; border: 1px solid #d7dce5; border-radius: 8px; box-shadow: 0 16px 40px rgb(19 27 45 / 0.08); }
@@ -347,7 +341,21 @@ func markdownDocumentToHTML(markdown, lang, socialImageURL string) string {
 `
 }
 
-func RenderMailSetupSocialImage() ([]byte, error) {
+func mailSetupSharePreviewTags(title, description, lang, imageURL string) string {
+	locale := openGraphLocale(lang)
+	return `  <meta property="og:type" content="website">
+  <meta property="og:title" content="` + html.EscapeString(title) + `">
+  <meta property="og:description" content="` + html.EscapeString(description) + `">
+  <meta property="og:image" content="` + html.EscapeString(imageURL) + `">
+  <meta property="og:locale" content="` + html.EscapeString(locale) + `">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="` + html.EscapeString(title) + `">
+  <meta name="twitter:description" content="` + html.EscapeString(description) + `">
+  <meta name="twitter:image" content="` + html.EscapeString(imageURL) + `">
+`
+}
+
+func RenderMailSetupSharePreviewImage() ([]byte, error) {
 	const (
 		width  = 1200
 		height = 630

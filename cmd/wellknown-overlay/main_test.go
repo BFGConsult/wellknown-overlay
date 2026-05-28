@@ -70,7 +70,7 @@ func TestValidateCommandReportsModuleRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, want := stdout.String(), "ok: 0 route(s), 8 module route(s)\n"; got != want {
+	if got, want := stdout.String(), "ok: 0 route(s), 7 module route(s)\n"; got != want {
 		t.Fatalf("stdout = %q, want %q", got, want)
 	}
 }

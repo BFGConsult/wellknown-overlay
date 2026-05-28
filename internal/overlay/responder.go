@@ -67,7 +67,11 @@ func (r *Responder) RenderHTTPRequest(routePath, rawQuery string, body []byte, p
 		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
 		lang := queryValueAny(rawQuery, "lang", "locale")
 		profile := r.mailAccount.SelectProfile(emailAddress)
-		body, _, err := RenderMailSetup(r.files, profile, r.mailAccount.ManualSetup, emailAddress, lang, mailSetupImageURL(publicBaseURL, lang))
+		imageURL := ""
+		if r.mailAccount.SharePreviewEnabled() {
+			imageURL = mailSetupImageURL(publicBaseURL, lang)
+		}
+		body, _, err := RenderMailSetup(r.files, profile, r.mailAccount.ManualSetup, emailAddress, lang, imageURL)
 		if err != nil {
 			return Response{}, err
 		}
@@ -78,7 +82,10 @@ func (r *Responder) RenderHTTPRequest(routePath, rawQuery string, body []byte, p
 		}, nil
 	}
 	if r.mailAccount != nil && routePath == MailSetupImagePath {
-		body, err := RenderMailSetupSocialImage()
+		if !r.mailAccount.SharePreviewEnabled() {
+			return Response{Status: http.StatusNotFound}, ErrNotFound
+		}
+		body, err := RenderMailSetupSharePreviewImage()
 		if err != nil {
 			return Response{}, err
 		}

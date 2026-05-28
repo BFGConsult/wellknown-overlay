@@ -2,6 +2,9 @@
   "mail_account": {
     "manual_setup": {
       "url": "https://autoconfig.example.org/mail/setup",
+      "share_preview": {
+        "enabled": true
+      },
       "extra_sections": [
         {
           "lang": "en",

@@ -66,6 +66,9 @@ truth:
   "mail_account": {
     "manual_setup": {
       "url": "https://autoconfig.efn.no/mail/setup",
+      "share_preview": {
+        "enabled": true
+      },
       "extra_sections": [
         {
           "lang": "en",
@@ -162,8 +165,10 @@ The module also serves an unsigned Apple configuration profile:
 
 - `/.well-known/mail/apple.mobileconfig`
 
-The setup page includes OpenGraph and Twitter summary metadata and serves a
-built-in default social preview image:
+Deployments can opt into share preview metadata for apps such as Telegram,
+Signal, WhatsApp, and Slack with `manual_setup.share_preview.enabled`. When
+enabled, the setup page includes OpenGraph and Twitter summary metadata and
+serves a built-in default preview image:
 
 - `/mail/setup-og.png`
 
@@ -312,6 +317,8 @@ Common `MAIL_*` variables:
   `/mail/setup`. Increase the number for additional sections, up to 20.
 - `MAIL_SETUP_EXTRA_SECTION_1_LANG` optionally limits that section to a
   normalized language code such as `en` or `nb`.
+- `MAIL_SETUP_SHARE_PREVIEW` enables OpenGraph and Twitter summary metadata
+  when set to `1`, `true`, `yes`, or `on`.
 
 If gateway-only variables such as `BACKEND_URL` are set on the core image, the
 Docker entrypoint helper warns that they only affect the gateway image. The

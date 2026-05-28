@@ -7,7 +7,7 @@ import (
 )
 
 func TestRenderMailSetupUsesEnglishTemplateAndEmailAddress(t *testing.T) {
-	body, lang, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "bfg@efn.no", "en", "https://autoconfig.example.org/mail/setup-og.png?lang=en")
+	body, lang, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "bfg@efn.no", "en", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -18,10 +18,7 @@ func TestRenderMailSetupUsesEnglishTemplateAndEmailAddress(t *testing.T) {
 	got := string(body)
 	for _, want := range []string{
 		"<h1>Email setup for EFN</h1>",
-		`<meta property="og:title" content="Email setup for EFN">`,
-		`<meta property="og:image" content="https://autoconfig.example.org/mail/setup-og.png?lang=en">`,
-		`<meta name="twitter:image" content="https://autoconfig.example.org/mail/setup-og.png?lang=en">`,
-		`<meta name="twitter:description" content="Email settings, automatic setup, and password information.">`,
+		`<meta name="description" content="Email settings, automatic setup, and password information.">`,
 		"Your email address: bfg@efn.no",
 		"<td>Server name</td><td>login.kristshell.net</td>",
 		"<td>Username</td><td>bfg@efn.no</td>",
@@ -30,10 +27,13 @@ func TestRenderMailSetupUsesEnglishTemplateAndEmailAddress(t *testing.T) {
 			t.Fatalf("body does not contain %q:\n%s", want, got)
 		}
 	}
+	if strings.Contains(got, `property="og:title"`) || strings.Contains(got, `name="twitter:card"`) {
+		t.Fatalf("share preview metadata should be opt-in:\n%s", got)
+	}
 }
 
 func TestRenderMailSetupUsesHumanPlaceholdersWithoutEmailAddress(t *testing.T) {
-	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "", "en", "https://autoconfig.example.org/mail/setup-og.png?lang=en")
+	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "", "en", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestRenderMailSetupUsesHumanPlaceholdersWithoutEmailAddress(t *testing.T) {
 }
 
 func TestRenderMailSetupUsesNorwegianPOTranslation(t *testing.T) {
-	body, lang, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "", "nb-NO", "https://autoconfig.example.org/mail/setup-og.png?lang=nb-NO")
+	body, lang, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "", "nb-NO", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,11 +59,29 @@ func TestRenderMailSetupUsesNorwegianPOTranslation(t *testing.T) {
 	got := string(body)
 	for _, want := range []string{
 		"<h1>E-postoppsett for EFN</h1>",
-		`<meta property="og:locale" content="nb_NO">`,
-		`<meta property="og:description" content="E-postinnstillinger, automatisk oppsett og passordinformasjon.">`,
+		`<meta name="description" content="E-postinnstillinger, automatisk oppsett og passordinformasjon.">`,
 		"Din e-postadresse: din fulle e-postadresse",
 		"<td>Servernavn</td><td>login.kristshell.net</td>",
 		"<td>Brukernavn</td><td>din fulle e-postadresse</td>",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("body does not contain %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderMailSetupAddsSharePreviewMetadataWhenImageURLIsSet(t *testing.T) {
+	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "bfg@efn.no", "en", "https://autoconfig.example.org/mail/setup-og.png?lang=en")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := string(body)
+	for _, want := range []string{
+		`<meta property="og:title" content="Email setup for EFN">`,
+		`<meta property="og:image" content="https://autoconfig.example.org/mail/setup-og.png?lang=en">`,
+		`<meta name="twitter:card" content="summary">`,
+		`<meta name="twitter:image" content="https://autoconfig.example.org/mail/setup-og.png?lang=en">`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("body does not contain %q:\n%s", want, got)
@@ -76,7 +94,7 @@ func TestRenderMailSetupAllowsRootTemplateOverride(t *testing.T) {
 		"mail-setup.md": {Data: []byte("Custom {{display_name}} {{incoming.hostname}}\n")},
 	}
 
-	body, _, err := RenderMailSetup(files, testMailAccountProfile("default", "EFN"), nil, "", "en", "https://autoconfig.example.org/mail/setup-og.png?lang=en")
+	body, _, err := RenderMailSetup(files, testMailAccountProfile("default", "EFN"), nil, "", "en", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +116,7 @@ func TestRenderMailSetupAppendsExtraSectionsWithMarkdownLinksAndLists(t *testing
 		},
 	}
 
-	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), manualSetup, "bfg@efn.no", "en", "https://autoconfig.example.org/mail/setup-og.png?lang=en")
+	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), manualSetup, "bfg@efn.no", "en", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +153,7 @@ func TestRenderMailSetupFiltersExtraSectionsByLanguage(t *testing.T) {
 		},
 	}
 
-	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), manualSetup, "bfg@efn.no", "nb-NO", "https://autoconfig.example.org/mail/setup-og.png?lang=nb-NO")
+	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), manualSetup, "bfg@efn.no", "nb-NO", "")
 	if err != nil {
 		t.Fatal(err)
 	}
