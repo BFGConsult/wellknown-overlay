@@ -303,6 +303,8 @@ func markdownDocumentToHTML(markdown, lang string) string {
 			i = next
 		}
 	}
+	description := mailSetupMetaDescription(lang)
+	locale := openGraphLocale(lang)
 
 	return `<!doctype html>
 <html lang="` + html.EscapeString(lang) + `">
@@ -310,6 +312,14 @@ func markdownDocumentToHTML(markdown, lang string) string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>` + html.EscapeString(title) + `</title>
+  <meta name="description" content="` + html.EscapeString(description) + `">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="` + html.EscapeString(title) + `">
+  <meta property="og:description" content="` + html.EscapeString(description) + `">
+  <meta property="og:locale" content="` + html.EscapeString(locale) + `">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="` + html.EscapeString(title) + `">
+  <meta name="twitter:description" content="` + html.EscapeString(description) + `">
   <style>
     :root { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #1a1d24; background: #f7f8fb; }
     body { margin: 0; padding: 32px; }
@@ -328,6 +338,26 @@ func markdownDocumentToHTML(markdown, lang string) string {
 </body>
 </html>
 `
+}
+
+func mailSetupMetaDescription(lang string) string {
+	switch normalizeLanguage(lang) {
+	case "nb", "nn", "no":
+		return "E-postinnstillinger, automatisk oppsett og passordinformasjon."
+	default:
+		return "Email settings, automatic setup, and password information."
+	}
+}
+
+func openGraphLocale(lang string) string {
+	switch normalizeLanguage(lang) {
+	case "nb", "no":
+		return "nb_NO"
+	case "nn":
+		return "nn_NO"
+	default:
+		return "en_US"
+	}
 }
 
 func markdownListToHTML(items []string) string {

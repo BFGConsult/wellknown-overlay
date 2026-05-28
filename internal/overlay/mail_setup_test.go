@@ -18,6 +18,8 @@ func TestRenderMailSetupUsesEnglishTemplateAndEmailAddress(t *testing.T) {
 	got := string(body)
 	for _, want := range []string{
 		"<h1>Email setup for EFN</h1>",
+		`<meta property="og:title" content="Email setup for EFN">`,
+		`<meta name="twitter:description" content="Email settings, automatic setup, and password information.">`,
 		"Your email address: bfg@efn.no",
 		"<td>Server name</td><td>login.kristshell.net</td>",
 		"<td>Username</td><td>bfg@efn.no</td>",
@@ -55,6 +57,8 @@ func TestRenderMailSetupUsesNorwegianPOTranslation(t *testing.T) {
 	got := string(body)
 	for _, want := range []string{
 		"<h1>E-postoppsett for EFN</h1>",
+		`<meta property="og:locale" content="nb_NO">`,
+		`<meta property="og:description" content="E-postinnstillinger, automatisk oppsett og passordinformasjon.">`,
 		"Din e-postadresse: din fulle e-postadresse",
 		"<td>Servernavn</td><td>login.kristshell.net</td>",
 		"<td>Brukernavn</td><td>din fulle e-postadresse</td>",
