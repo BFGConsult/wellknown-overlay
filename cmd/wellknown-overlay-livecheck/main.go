@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/BFGConsult/wellknown-overlay/internal/livecheck"
@@ -24,6 +25,7 @@ func run(args []string) error {
 	insecureShort := fs.Bool("k", false, "skip TLS certificate verification")
 	verbose := fs.Bool("v", false, "show optional failed discovery attempts even when a profile passes")
 	skipMailAuthDNS := fs.Bool("skip-mail-auth-dns", false, "skip advisory SPF, DMARC, and DKIM DNS checks")
+	dkimSelectors := fs.String("dkim-selectors", "", "comma-separated DKIM selectors to check, overrides DKIM_SELECTORS")
 	timeout := fs.Duration("timeout", 15*time.Second, "per-request timeout")
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -47,6 +49,7 @@ func run(args []string) error {
 		InsecureTLS:     *insecure || *insecureShort,
 		Verbose:         *verbose,
 		SkipMailAuthDNS: *skipMailAuthDNS,
+		DKIMSelectors:   parseDKIMSelectors(*dkimSelectors, os.Getenv("DKIM_SELECTORS")),
 		Timeout:         *timeout,
 	}, os.Stdout)
 	if err != nil {
@@ -67,5 +70,31 @@ options:
   -v         show optional failed discovery attempts even when a profile passes
   -skip-mail-auth-dns
              skip advisory SPF, DMARC, and DKIM DNS checks
+  -dkim-selectors
+             comma-separated DKIM selectors to check, overrides DKIM_SELECTORS
   -timeout   per-request timeout, default 15s`)
+}
+
+func parseDKIMSelectors(cliValue, envValue string) []string {
+	value := strings.TrimSpace(cliValue)
+	if value == "" {
+		value = strings.TrimSpace(envValue)
+	}
+	if value == "" {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	var selectors []string
+	for _, part := range strings.Split(value, ",") {
+		selector := strings.TrimSpace(part)
+		if selector == "" {
+			continue
+		}
+		if _, ok := seen[selector]; ok {
+			continue
+		}
+		seen[selector] = struct{}{}
+		selectors = append(selectors, selector)
+	}
+	return selectors
 }

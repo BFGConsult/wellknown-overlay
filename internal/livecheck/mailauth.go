@@ -2,17 +2,22 @@ package livecheck
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 )
 
-func (c Checker) CheckMailAuthDNS(ctx context.Context, domain string) Result {
+func (c Checker) CheckMailAuthDNS(ctx context.Context, domain string, dkimSelectors []string) Result {
 	result := Result{Name: "MAIL AUTH DNS", Passed: true}
 	result.Details = append(result.Details, c.checkSPF(ctx, domain)...)
 	result.Details = append(result.Details, c.checkDMARC(ctx, domain)...)
-	result.Details = append(result.Details, "DKIM: not tested (no selector input is currently supported)")
-	result.Problems = append(result.Problems, "DKIM is not verified by this livecheck yet. DKIM requires one or more selector names, and this tool currently has no selector input, so assume DKIM still needs separate verification.")
+	dkimDetails, dkimProblems := c.checkDKIM(ctx, domain, dkimSelectors)
+	result.Details = append(result.Details, dkimDetails...)
+	result.Problems = append(result.Problems, dkimProblems...)
+	result.Details = append(result.Details, "DKIM end-to-end message signing: not tested")
+	result.Problems = append(result.Problems, "DKIM end-to-end message signing is not tested by this livecheck. Selector DNS records can be correct while outbound messages are still unsigned or signed incorrectly.")
 	return result
 }
 
@@ -93,11 +98,60 @@ func (c Checker) checkDMARC(ctx context.Context, domain string) []string {
 	}
 }
 
+func (c Checker) checkDKIM(ctx context.Context, domain string, selectors []string) ([]string, []string) {
+	if len(selectors) == 0 {
+		return []string{"DKIM DNS: not tested because no selectors were supplied"}, []string{"DKIM DNS selector records were not tested. Supply selectors with -dkim-selectors selector1,selector2 or DKIM_SELECTORS=selector1,selector2."}
+	}
+
+	var details []string
+	var problems []string
+	for _, selector := range selectors {
+		name := selector + "._domainkey." + domain
+		records, err := c.lookupTXT(ctx, name)
+		if err != nil {
+			details = append(details, fmt.Sprintf("DKIM %s: missing", name))
+			problems = append(problems, "DKIM selector "+selector+" is missing. Suggestion: add one DKIM TXT record at "+name+".")
+			continue
+		}
+
+		dkim := findDKIMTXT(records)
+		switch len(dkim) {
+		case 0:
+			details = append(details, fmt.Sprintf("DKIM %s: missing", name))
+			problems = append(problems, "DKIM selector "+selector+" has TXT records, but none look like DKIM records. Suggestion: add a TXT record containing v=DKIM1 and p=<public-key>.")
+			continue
+		case 1:
+			keyType, warnings := validateDKIMRecord(dkim[0])
+			details = append(details, fmt.Sprintf("DKIM %s: key type %s", name, keyType))
+			for _, warning := range warnings {
+				problems = append(problems, "DKIM selector "+selector+": "+warning)
+			}
+		default:
+			sort.Strings(dkim)
+			details = append(details, fmt.Sprintf("DKIM %s: multiple DKIM records found: %s", name, strings.Join(dkim, " | ")))
+			problems = append(problems, "DKIM selector "+selector+" has multiple DKIM records. Suggestion: publish exactly one DKIM TXT record per selector.")
+		}
+	}
+	return details, problems
+}
+
 func findPrefixedTXT(records []string, prefix string) []string {
 	var matches []string
 	for _, record := range records {
 		trimmed := strings.TrimSpace(record)
 		if strings.HasPrefix(strings.ToLower(trimmed), prefix) {
+			matches = append(matches, trimmed)
+		}
+	}
+	return matches
+}
+
+func findDKIMTXT(records []string) []string {
+	var matches []string
+	for _, record := range records {
+		trimmed := strings.TrimSpace(record)
+		tags := parseMailAuthTags(trimmed)
+		if strings.Contains(strings.ToLower(trimmed), "v=dkim1") || tags["p"] != "" {
 			matches = append(matches, trimmed)
 		}
 	}
@@ -115,6 +169,10 @@ func spfHasAllMechanism(record string) bool {
 }
 
 func parseDMARCTags(record string) map[string]string {
+	return parseMailAuthTags(record)
+}
+
+func parseMailAuthTags(record string) map[string]string {
 	tags := make(map[string]string)
 	for _, part := range strings.Split(record, ";") {
 		key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
@@ -124,4 +182,49 @@ func parseDMARCTags(record string) map[string]string {
 		tags[strings.ToLower(strings.TrimSpace(key))] = strings.TrimSpace(value)
 	}
 	return tags
+}
+
+func validateDKIMRecord(record string) (string, []string) {
+	tags := parseMailAuthTags(record)
+	keyType := strings.ToLower(tags["k"])
+	if keyType == "" {
+		keyType = "rsa"
+	}
+
+	var warnings []string
+	if strings.ToLower(tags["v"]) != "dkim1" && !strings.Contains(strings.ToLower(record), "v=dkim1") {
+		warnings = append(warnings, "record does not contain v=DKIM1.")
+	}
+
+	key, ok := tags["p"]
+	if !ok {
+		warnings = append(warnings, "record has no p= public key.")
+		return keyType, warnings
+	}
+	key = stripWhitespace(key)
+	if key == "" {
+		warnings = append(warnings, "record has an empty p= public key.")
+		return keyType, warnings
+	}
+	if !validBase64(key) {
+		warnings = append(warnings, "p= public key does not look like valid base64.")
+	}
+	return keyType, warnings
+}
+
+func stripWhitespace(value string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, value)
+}
+
+func validBase64(value string) bool {
+	if _, err := base64.StdEncoding.DecodeString(value); err == nil {
+		return true
+	}
+	_, err := base64.RawStdEncoding.DecodeString(value)
+	return err == nil
 }

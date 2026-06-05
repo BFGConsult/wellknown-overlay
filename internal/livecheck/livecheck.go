@@ -32,6 +32,7 @@ type Options struct {
 	InsecureTLS     bool
 	Verbose         bool
 	SkipMailAuthDNS bool
+	DKIMSelectors   []string
 	Timeout         time.Duration
 }
 
@@ -145,7 +146,7 @@ func runWithChecker(ctx context.Context, opts Options, stdout io.Writer, checker
 	writeResult(stdout, checker.CheckDNSSRV(ctx, email, domain), true)
 	advisoryWarnings := false
 	if !opts.SkipMailAuthDNS {
-		mailAuthResult := checker.CheckMailAuthDNS(ctx, domain)
+		mailAuthResult := checker.CheckMailAuthDNS(ctx, domain, opts.DKIMSelectors)
 		writeResult(stdout, mailAuthResult, true)
 		advisoryWarnings = len(mailAuthResult.Problems) > 0
 	}
