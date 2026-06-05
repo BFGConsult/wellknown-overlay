@@ -2,6 +2,8 @@
 
 Current backlog from the deployment/autoconfig work:
 
+- Use `autotest@efn.no` as the dedicated EFN live/manual testing address in
+  future examples, livecheck runs, and client verification notes.
 - Improve the gateway's overlay-only `index.html` into a small explanatory
   page that links to relevant standards documents and, once public, the
   wellknown-overlay project.
@@ -16,3 +18,9 @@ Current backlog from the deployment/autoconfig work:
   change, the PO template and language files should be updated so translation
   status degrades per changed string, not to zero for the whole page unless the
   page is genuinely rewritten.
+- Explore an online version of the live tester where a user can enter an email
+  address, optionally add a password, and verify the discovered IMAP/SMTP setup
+  end-to-end. Password checks are useful with throwaway accounts during early
+  testing, but publication still needs an explicit security model: avoid storing
+  credentials, keep logs scrubbed, rate-limit attempts, require HTTPS, and make
+  the test boundaries clear to users.

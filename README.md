@@ -225,6 +225,7 @@ Run live client-autosetup checks for a deployed domain:
 go run ./cmd/wellknown-overlay-livecheck user@example.org
 go run ./cmd/wellknown-overlay-livecheck user@example.org THUNDERBIRD,OUTLOOK
 go run ./cmd/wellknown-overlay-livecheck -insecure user@example.org APPLE
+go run ./cmd/wellknown-overlay-livecheck -skip-mail-auth-dns user@example.org
 ```
 
 `wellknown-overlay-livecheck` is a diagnostic companion tool. It derives the
@@ -238,6 +239,10 @@ deployment-neutral and refer to DNS, HTTPS certificates, reverse proxy/ingress
 routing, and overlay endpoint reachability. The check also reports RFC 6186 and
 Autodiscover SRV records, deriving suggested DNS records from the rendered mail
 account settings without failing otherwise-working HTTP discovery checks.
+By default it also reports advisory SPF, DMARC, and DKIM mail-auth DNS status.
+SPF and DMARC are checked via TXT records. DKIM is reported as not tested until
+selector input is supported. Use `-skip-mail-auth-dns` to suppress these
+advisory mail-auth checks.
 
 See `COVERAGE.md` for expected and manually verified mail-client discovery
 support.

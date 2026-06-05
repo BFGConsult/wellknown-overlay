@@ -23,6 +23,7 @@ func run(args []string) error {
 	insecure := fs.Bool("insecure", false, "skip TLS certificate verification")
 	insecureShort := fs.Bool("k", false, "skip TLS certificate verification")
 	verbose := fs.Bool("v", false, "show optional failed discovery attempts even when a profile passes")
+	skipMailAuthDNS := fs.Bool("skip-mail-auth-dns", false, "skip advisory SPF, DMARC, and DKIM DNS checks")
 	timeout := fs.Duration("timeout", 15*time.Second, "per-request timeout")
 	if err := fs.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -41,11 +42,12 @@ func run(args []string) error {
 	}
 
 	ok, err := livecheck.Run(context.Background(), livecheck.Options{
-		EmailAddress: fs.Arg(0),
-		Profiles:     profiles,
-		InsecureTLS:  *insecure || *insecureShort,
-		Verbose:      *verbose,
-		Timeout:      *timeout,
+		EmailAddress:    fs.Arg(0),
+		Profiles:        profiles,
+		InsecureTLS:     *insecure || *insecureShort,
+		Verbose:         *verbose,
+		SkipMailAuthDNS: *skipMailAuthDNS,
+		Timeout:         *timeout,
 	}, os.Stdout)
 	if err != nil {
 		return err
@@ -63,5 +65,7 @@ options:
   -insecure  skip TLS certificate verification for diagnosis
   -k         alias for -insecure
   -v         show optional failed discovery attempts even when a profile passes
+  -skip-mail-auth-dns
+             skip advisory SPF, DMARC, and DKIM DNS checks
   -timeout   per-request timeout, default 15s`)
 }

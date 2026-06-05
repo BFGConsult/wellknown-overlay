@@ -195,6 +195,9 @@ func testChecker(responses map[string]testResponse) Checker {
 		LookupSRV: func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
 			return "", nil, errors.New("no such host")
 		},
+		LookupTXT: func(ctx context.Context, name string) ([]string, error) {
+			return nil, errors.New("no such host")
+		},
 	}
 }
 

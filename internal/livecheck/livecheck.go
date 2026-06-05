@@ -27,17 +27,19 @@ const (
 )
 
 type Options struct {
-	EmailAddress string
-	Profiles     []Profile
-	InsecureTLS  bool
-	Verbose      bool
-	Timeout      time.Duration
+	EmailAddress    string
+	Profiles        []Profile
+	InsecureTLS     bool
+	Verbose         bool
+	SkipMailAuthDNS bool
+	Timeout         time.Duration
 }
 
 type Checker struct {
 	HTTPClient *http.Client
 	LookupHost func(context.Context, string) ([]string, error)
 	LookupSRV  func(context.Context, string, string, string) (string, []*net.SRV, error)
+	LookupTXT  func(context.Context, string) ([]string, error)
 	Stdout     io.Writer
 }
 
@@ -83,15 +85,6 @@ func ParseProfiles(args []string) ([]Profile, error) {
 }
 
 func Run(ctx context.Context, opts Options, stdout io.Writer) (bool, error) {
-	email, domain, err := parseEmail(opts.EmailAddress)
-	if err != nil {
-		return false, err
-	}
-	profiles := opts.Profiles
-	if len(profiles) == 0 {
-		profiles = []Profile{Thunderbird, Outlook, Apple}
-	}
-
 	timeout := opts.Timeout
 	if timeout == 0 {
 		timeout = 15 * time.Second
@@ -105,7 +98,22 @@ func Run(ctx context.Context, opts Options, stdout io.Writer) (bool, error) {
 		LookupSRV: func(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
 			return net.DefaultResolver.LookupSRV(ctx, service, proto, name)
 		},
+		LookupTXT: func(ctx context.Context, name string) ([]string, error) {
+			return net.DefaultResolver.LookupTXT(ctx, name)
+		},
 		Stdout: stdout,
+	}
+	return runWithChecker(ctx, opts, stdout, checker)
+}
+
+func runWithChecker(ctx context.Context, opts Options, stdout io.Writer, checker Checker) (bool, error) {
+	email, domain, err := parseEmail(opts.EmailAddress)
+	if err != nil {
+		return false, err
+	}
+	profiles := opts.Profiles
+	if len(profiles) == 0 {
+		profiles = []Profile{Thunderbird, Outlook, Apple}
 	}
 
 	fmt.Fprintf(stdout, "Livecheck for %s\n", email)
@@ -135,9 +143,19 @@ func Run(ctx context.Context, opts Options, stdout io.Writer) (bool, error) {
 		}
 	}
 	writeResult(stdout, checker.CheckDNSSRV(ctx, email, domain), true)
+	advisoryWarnings := false
+	if !opts.SkipMailAuthDNS {
+		mailAuthResult := checker.CheckMailAuthDNS(ctx, domain)
+		writeResult(stdout, mailAuthResult, true)
+		advisoryWarnings = len(mailAuthResult.Problems) > 0
+	}
 
 	if allPassed {
-		fmt.Fprintln(stdout, "\nSummary: PASS")
+		if advisoryWarnings {
+			fmt.Fprintln(stdout, "\nSummary: PASS (with warnings)")
+		} else {
+			fmt.Fprintln(stdout, "\nSummary: PASS")
+		}
 	} else {
 		fmt.Fprintln(stdout, "\nSummary: FAIL")
 	}
@@ -392,6 +410,13 @@ func (c Checker) lookupSRV(ctx context.Context, service, proto, name string) (st
 		return c.LookupSRV(ctx, service, proto, name)
 	}
 	return net.DefaultResolver.LookupSRV(ctx, service, proto, name)
+}
+
+func (c Checker) lookupTXT(ctx context.Context, name string) ([]string, error) {
+	if c.LookupTXT != nil {
+		return c.LookupTXT(ctx, name)
+	}
+	return net.DefaultResolver.LookupTXT(ctx, name)
 }
 
 type expectedSRV struct {
