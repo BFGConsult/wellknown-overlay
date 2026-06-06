@@ -33,19 +33,23 @@ type Options struct {
 	Verbose         bool
 	SkipMailAuthDNS bool
 	DKIMSelectors   []string
+	MinDNSTTL       uint32
 	RoundTrip       RoundTripOptions
 	Timeout         time.Duration
 }
 
 type Checker struct {
-	HTTPClient *http.Client
-	LookupHost func(context.Context, string) ([]string, error)
-	LookupSRV  func(context.Context, string, string, string) (string, []*net.SRV, error)
-	LookupTXT  func(context.Context, string) ([]string, error)
-	SendMail   func(context.Context, roundTripMessage, mailServerSettings, string, string, bool) error
-	PollIMAP   func(context.Context, roundTripMessage, mailServerSettings, string, string, bool, time.Duration, bool) (roundTripReceipt, error)
-	Now        func() time.Time
-	Stdout     io.Writer
+	HTTPClient      *http.Client
+	LookupHost      func(context.Context, string) ([]string, error)
+	LookupSRV       func(context.Context, string, string, string) (string, []*net.SRV, error)
+	LookupTXT       func(context.Context, string) ([]string, error)
+	LookupNS        func(context.Context, string) ([]*net.NS, error)
+	QueryDNS        func(context.Context, string, string, uint16) ([]string, error)
+	QueryDNSRecords func(context.Context, string, string, uint16) ([]DNSRecord, error)
+	SendMail        func(context.Context, roundTripMessage, mailServerSettings, string, string, bool) error
+	PollIMAP        func(context.Context, roundTripMessage, mailServerSettings, string, string, bool, time.Duration, bool) (roundTripReceipt, error)
+	Now             func() time.Time
+	Stdout          io.Writer
 }
 
 type Result struct {
@@ -106,6 +110,9 @@ func Run(ctx context.Context, opts Options, stdout io.Writer) (bool, error) {
 		LookupTXT: func(ctx context.Context, name string) ([]string, error) {
 			return net.DefaultResolver.LookupTXT(ctx, name)
 		},
+		LookupNS: func(ctx context.Context, name string) ([]*net.NS, error) {
+			return net.DefaultResolver.LookupNS(ctx, name)
+		},
 		Stdout: stdout,
 	}
 	return runWithChecker(ctx, opts, stdout, checker)
@@ -148,11 +155,19 @@ func runWithChecker(ctx context.Context, opts Options, stdout io.Writer, checker
 		}
 	}
 	writeResult(stdout, checker.CheckDNSSRV(ctx, email, domain), true)
-	advisoryWarnings := false
+	minDNSTTL := opts.MinDNSTTL
+	if minDNSTTL == 0 {
+		minDNSTTL = 3600
+	}
+	authoritativeDNSResult := checker.CheckAuthoritativeDNS(ctx, email, domain, minDNSTTL)
+	writeResult(stdout, authoritativeDNSResult, true)
+	advisoryWarnings := len(authoritativeDNSResult.Problems) > 0
 	if !opts.SkipMailAuthDNS {
 		mailAuthResult := checker.CheckMailAuthDNS(ctx, domain, opts.DKIMSelectors)
 		writeResult(stdout, mailAuthResult, true)
-		advisoryWarnings = len(mailAuthResult.Problems) > 0
+		if len(mailAuthResult.Problems) > 0 {
+			advisoryWarnings = true
+		}
 	}
 	if opts.RoundTrip.Enabled {
 		roundTripResult := checker.CheckRoundTrip(ctx, email, domain, opts.RoundTrip)
@@ -281,6 +296,30 @@ func (c Checker) CheckDNSSRV(ctx context.Context, email, domain string) Result {
 		return result
 	}
 
+	expected := expectedSRVRecords(domain, settings)
+
+	var missing []expectedSRV
+	for _, want := range expected {
+		detail, ok := c.checkSRV(ctx, want)
+		result.Details = append(result.Details, detail)
+		if !ok {
+			missing = append(missing, want)
+		}
+	}
+	if len(missing) > 0 {
+		result.Details = append(result.Details, "suggested DNS records:")
+		for _, want := range missing {
+			result.Details = append(result.Details, fmt.Sprintf("%s.%s. 3600 IN SRV 0 %d %d %s", want.Service, domain, want.Weight, want.Port, want.Target))
+		}
+		result.Details = append(result.Details, "optional explicit not-offered records when POP/plain IMAP are intentionally unsupported:")
+		result.Details = append(result.Details, fmt.Sprintf("_imap._tcp.%s. 3600 IN SRV 0 0 0 .", domain))
+		result.Details = append(result.Details, fmt.Sprintf("_pop3._tcp.%s. 3600 IN SRV 0 0 0 .", domain))
+		result.Details = append(result.Details, fmt.Sprintf("_pop3s._tcp.%s. 3600 IN SRV 0 0 0 .", domain))
+	}
+	return result
+}
+
+func expectedSRVRecords(domain string, settings mailSettings) []expectedSRV {
 	expected := []expectedSRV{
 		{
 			Service: "_autodiscover._tcp",
@@ -352,26 +391,7 @@ func (c Checker) CheckDNSSRV(ctx context.Context, email, domain string) Result {
 			Comment: "RFC 6186 message submission discovery",
 		})
 	}
-
-	var missing []expectedSRV
-	for _, want := range expected {
-		detail, ok := c.checkSRV(ctx, want)
-		result.Details = append(result.Details, detail)
-		if !ok {
-			missing = append(missing, want)
-		}
-	}
-	if len(missing) > 0 {
-		result.Details = append(result.Details, "suggested DNS records:")
-		for _, want := range missing {
-			result.Details = append(result.Details, fmt.Sprintf("%s.%s. 3600 IN SRV 0 %d %d %s", want.Service, domain, want.Weight, want.Port, want.Target))
-		}
-		result.Details = append(result.Details, "optional explicit not-offered records when POP/plain IMAP are intentionally unsupported:")
-		result.Details = append(result.Details, fmt.Sprintf("_imap._tcp.%s. 3600 IN SRV 0 0 0 .", domain))
-		result.Details = append(result.Details, fmt.Sprintf("_pop3._tcp.%s. 3600 IN SRV 0 0 0 .", domain))
-		result.Details = append(result.Details, fmt.Sprintf("_pop3s._tcp.%s. 3600 IN SRV 0 0 0 .", domain))
-	}
-	return result
+	return expected
 }
 
 func (c Checker) discoverMailSettings(ctx context.Context, email, domain string) (mailSettings, error) {

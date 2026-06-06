@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +34,7 @@ func run(args []string) error {
 	verbose := fs.Bool("v", false, "show optional failed discovery attempts even when a profile passes")
 	configPath := fs.String("livecheck-config", "", "local KEY=value config file for livecheck secrets/options")
 	skipMailAuthDNS := fs.Bool("skip-mail-auth-dns", false, "skip advisory SPF, DMARC, and DKIM DNS checks")
+	minDNSTTLFlag := fs.Int("min-dns-ttl", -1, "minimum recommended authoritative DNS TTL in seconds")
 	dkimSelectors := fs.String("dkim-selectors", "", "comma-separated DKIM selectors to check, overrides DKIM_SELECTORS")
 	roundTrip := fs.Bool("round-trip", false, "send a test message over SMTP and verify receipt over IMAP")
 	roundTripTimeout := fs.Duration("round-trip-timeout", 60*time.Second, "total timeout for the round-trip test")
@@ -62,6 +64,10 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	minDNSTTL, err := minDNSTTL(*minDNSTTLFlag, configValue("LIVECHECK_MIN_DNS_TTL", fileConfig))
+	if err != nil {
+		return err
+	}
 
 	ok, err := livecheck.Run(context.Background(), livecheck.Options{
 		EmailAddress:    emailAddress,
@@ -70,6 +76,7 @@ func run(args []string) error {
 		Verbose:         *verbose,
 		SkipMailAuthDNS: *skipMailAuthDNS,
 		DKIMSelectors:   parseDKIMSelectors(*dkimSelectors, configValue("DKIM_SELECTORS", fileConfig)),
+		MinDNSTTL:       minDNSTTL,
 		RoundTrip: livecheck.RoundTripOptions{
 			Enabled:          *roundTrip,
 			Password:         password,
@@ -99,9 +106,12 @@ options:
   -v         show optional failed discovery attempts even when a profile passes
   -livecheck-config
              local KEY=value config file; supports LIVECHECK_EMAIL, LIVECHECK_PASSWORD,
-             LIVECHECK_RECEIVER_EMAIL, LIVECHECK_RECEIVER_PASSWORD, and DKIM_SELECTORS
+             LIVECHECK_RECEIVER_EMAIL, LIVECHECK_RECEIVER_PASSWORD,
+             LIVECHECK_MIN_DNS_TTL, and DKIM_SELECTORS
   -skip-mail-auth-dns
              skip advisory SPF, DMARC, and DKIM DNS checks
+  -min-dns-ttl
+             warn when authoritative DNS TTL is below this value, default 3600
   -dkim-selectors
              comma-separated DKIM selectors to check, overrides DKIM_SELECTORS
   -round-trip
@@ -135,6 +145,21 @@ func parseDKIMSelectors(cliValue, envValue string) []string {
 		selectors = append(selectors, selector)
 	}
 	return selectors
+}
+
+func minDNSTTL(cliValue int, envValue string) (uint32, error) {
+	if cliValue >= 0 {
+		return uint32(cliValue), nil
+	}
+	value := strings.TrimSpace(envValue)
+	if value == "" {
+		return 3600, nil
+	}
+	ttl, err := strconv.ParseUint(value, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid LIVECHECK_MIN_DNS_TTL %q: %w", value, err)
+	}
+	return uint32(ttl), nil
 }
 
 func readLivecheckConfig(path string) (map[string]string, error) {

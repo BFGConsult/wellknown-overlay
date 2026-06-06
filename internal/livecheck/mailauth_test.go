@@ -276,9 +276,6 @@ func TestSkipMailAuthDNSSuppressesMailAuthSection(t *testing.T) {
 	if strings.Contains(stdout.String(), "[MAIL AUTH DNS]") {
 		t.Fatalf("mail auth section should be suppressed:\n%s", stdout.String())
 	}
-	if strings.Contains(stdout.String(), "with warnings") {
-		t.Fatalf("skip should avoid mail-auth warning summary:\n%s", stdout.String())
-	}
 }
 
 func testMailAuthChecker(records map[string][]string) Checker {

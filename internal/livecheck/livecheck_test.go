@@ -198,6 +198,9 @@ func testChecker(responses map[string]testResponse) Checker {
 		LookupTXT: func(ctx context.Context, name string) ([]string, error) {
 			return nil, errors.New("no such host")
 		},
+		LookupNS: func(ctx context.Context, name string) ([]*net.NS, error) {
+			return nil, errors.New("no such host")
+		},
 	}
 }
 

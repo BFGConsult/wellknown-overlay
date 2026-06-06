@@ -251,6 +251,12 @@ deployment-neutral and refer to DNS, HTTPS certificates, reverse proxy/ingress
 routing, and overlay endpoint reachability. The check also reports RFC 6186 and
 Autodiscover SRV records, deriving suggested DNS records from the rendered mail
 account settings without failing otherwise-working HTTP discovery checks.
+It also queries authoritative nameservers directly for SOA consistency,
+discovery hosts, and the same SRV records, so DNS changes can be checked
+without waiting for recursive resolver caches to agree.
+Authoritative DNS records with TTL below `-min-dns-ttl` are reported as
+warnings; the default minimum is `3600` seconds and can also be set with
+`LIVECHECK_MIN_DNS_TTL` in a local livecheck config.
 By default it also reports advisory SPF, DMARC, and DKIM mail-auth DNS status.
 SPF and DMARC are checked via TXT records. DKIM selector DNS records are checked
 when selectors are supplied with `-dkim-selectors` or `DKIM_SELECTORS`.

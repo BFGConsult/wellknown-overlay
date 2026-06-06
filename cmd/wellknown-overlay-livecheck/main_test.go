@@ -30,6 +30,42 @@ func TestParseDKIMSelectorsReturnsNilWhenUnset(t *testing.T) {
 	}
 }
 
+func TestMinDNSTTLDefaultsTo3600(t *testing.T) {
+	got, err := minDNSTTL(-1, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 3600 {
+		t.Fatalf("min DNS TTL = %d, want 3600", got)
+	}
+}
+
+func TestMinDNSTTLUsesConfigValue(t *testing.T) {
+	got, err := minDNSTTL(-1, "300")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 300 {
+		t.Fatalf("min DNS TTL = %d, want 300", got)
+	}
+}
+
+func TestMinDNSTTLCLITakesPrecedence(t *testing.T) {
+	got, err := minDNSTTL(600, "300")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 600 {
+		t.Fatalf("min DNS TTL = %d, want 600", got)
+	}
+}
+
+func TestMinDNSTTLRejectsInvalidConfigValue(t *testing.T) {
+	if _, err := minDNSTTL(-1, "nope"); err == nil {
+		t.Fatal("expected invalid TTL error")
+	}
+}
+
 func TestRoundTripPasswordUsesEnvWhenEnabled(t *testing.T) {
 	got, err := roundTripPassword(true, "secret")
 	if err != nil {
@@ -73,6 +109,7 @@ LIVECHECK_PASSWORD='secret value'
 LIVECHECK_RECEIVER_EMAIL=receiver@example.net
 LIVECHECK_RECEIVER_PASSWORD='receiver secret'
 DKIM_SELECTORS="mail2026,default"
+LIVECHECK_MIN_DNS_TTL=300
 UNQUOTED=value
 `), 0o600); err != nil {
 		t.Fatal(err)
@@ -87,6 +124,9 @@ UNQUOTED=value
 	}
 	if got, want := config["DKIM_SELECTORS"], "mail2026,default"; got != want {
 		t.Fatalf("selectors = %q, want %q", got, want)
+	}
+	if got, want := config["LIVECHECK_MIN_DNS_TTL"], "300"; got != want {
+		t.Fatalf("min dns ttl = %q, want %q", got, want)
 	}
 	if got, want := config["LIVECHECK_RECEIVER_EMAIL"], "receiver@example.net"; got != want {
 		t.Fatalf("receiver email = %q, want %q", got, want)
