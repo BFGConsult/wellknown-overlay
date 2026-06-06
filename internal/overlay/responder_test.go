@@ -191,6 +191,49 @@ func TestResponderSelectsMailAccountProfileFromEmailAddress(t *testing.T) {
 	}
 }
 
+func TestResponderSelectsMailAccountProfileFromHostWhenEmailMissing(t *testing.T) {
+	account := MailAccount{Profiles: []MailAccountProfile{
+		testMailAccountProfile("*@invest.example.org", "Invest"),
+		testMailAccountProfile("*@consult.example.org", "Consult"),
+		testMailAccountProfile("default", "Default"),
+	}}
+	account.Profiles[0].Domain = "invest.example.org"
+	account.Profiles[1].Domain = "consult.example.org"
+
+	responder := NewResponder(Config{MailAccount: &account}, fstest.MapFS{})
+	response, err := responder.RenderHTTPRequestForHost(ThunderbirdAutoconfigWellKnownPath, "", nil, "", "autoconfig.consult.example.org")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := string(response.Body)
+	if !strings.Contains(body, "<displayName>Consult</displayName>") {
+		t.Fatalf("body does not use host-selected profile:\n%s", body)
+	}
+	if !strings.Contains(body, "<domain>consult.example.org</domain>") {
+		t.Fatalf("body does not use host-selected domain:\n%s", body)
+	}
+}
+
+func TestResponderHostFallbackDoesNotOverrideRequestEmail(t *testing.T) {
+	account := MailAccount{Profiles: []MailAccountProfile{
+		testMailAccountProfile("*@invest.example.org", "Invest"),
+		testMailAccountProfile("*@consult.example.org", "Consult"),
+		testMailAccountProfile("default", "Default"),
+	}}
+
+	responder := NewResponder(Config{MailAccount: &account}, fstest.MapFS{})
+	response, err := responder.RenderHTTPRequestForHost(ThunderbirdAutoconfigWellKnownPath, "emailaddress=person%40invest.example.org", nil, "", "autoconfig.consult.example.org")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := string(response.Body)
+	if !strings.Contains(body, "<displayName>Invest</displayName>") {
+		t.Fatalf("body does not use email-selected profile:\n%s", body)
+	}
+}
+
 func TestResponderSelectsAutodiscoverProfileFromRequestBody(t *testing.T) {
 	account := MailAccount{Profiles: []MailAccountProfile{
 		testMailAccountProfile("*@example.org", "EFN"),

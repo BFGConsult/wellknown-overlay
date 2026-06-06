@@ -50,9 +50,13 @@ func (r *Responder) RenderRequestBody(routePath, rawQuery string, body []byte) (
 }
 
 func (r *Responder) RenderHTTPRequest(routePath, rawQuery string, body []byte, publicBaseURL string) (Response, error) {
+	return r.RenderHTTPRequestForHost(routePath, rawQuery, body, publicBaseURL, "")
+}
+
+func (r *Responder) RenderHTTPRequestForHost(routePath, rawQuery string, body []byte, publicBaseURL, requestHost string) (Response, error) {
 	if r.mailAccount != nil && isThunderbirdAutoconfigPath(routePath) {
 		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
-		profile := r.mailAccount.SelectProfile(emailAddress)
+		profile := r.mailAccount.SelectProfileForRequest(emailAddress, requestHost)
 		body, err := RenderThunderbirdAutoconfig(profile, emailAddress, r.mailAccount.ManualSetupURL())
 		if err != nil {
 			return Response{}, err
@@ -66,7 +70,7 @@ func (r *Responder) RenderHTTPRequest(routePath, rawQuery string, body []byte, p
 	if r.mailAccount != nil && routePath == MailSetupPath {
 		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
 		lang := queryValueAny(rawQuery, "lang", "locale")
-		profile := r.mailAccount.SelectProfile(emailAddress)
+		profile := r.mailAccount.SelectProfileForRequest(emailAddress, requestHost)
 		imageURL := ""
 		if r.mailAccount.SharePreviewEnabled() {
 			imageURL = mailSetupImageURL(publicBaseURL, lang)
@@ -97,7 +101,7 @@ func (r *Responder) RenderHTTPRequest(routePath, rawQuery string, body []byte, p
 	}
 	if r.mailAccount != nil && routePath == AppleMobileconfigPath {
 		emailAddress := queryValueAny(rawQuery, "emailaddress", "EmailAddress")
-		profile := r.mailAccount.SelectProfile(emailAddress)
+		profile := r.mailAccount.SelectProfileForRequest(emailAddress, requestHost)
 		body, err := RenderAppleMobileconfig(profile, emailAddress)
 		if err != nil {
 			return Response{}, err
@@ -113,7 +117,7 @@ func (r *Responder) RenderHTTPRequest(routePath, rawQuery string, body []byte, p
 		if emailAddress == "" {
 			emailAddress = EmailAddressFromAutodiscoverRequest(body)
 		}
-		profile := r.mailAccount.SelectProfile(emailAddress)
+		profile := r.mailAccount.SelectProfileForRequest(emailAddress, requestHost)
 		body, err := RenderAutodiscover(profile, emailAddress)
 		if err != nil {
 			return Response{}, err

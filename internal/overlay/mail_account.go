@@ -49,6 +49,27 @@ func AutodiscoverPaths() []string {
 
 func (cfg MailAccount) SelectProfile(emailAddress string) MailAccountProfile {
 	normalizedEmail := strings.ToLower(emailAddress)
+	return cfg.selectProfileCandidates(profileCandidates{emailAddresses: []string{normalizedEmail}})
+}
+
+func (cfg MailAccount) SelectProfileForRequest(emailAddress, host string) MailAccountProfile {
+	normalizedEmail := strings.ToLower(strings.TrimSpace(emailAddress))
+	if normalizedEmail != "" {
+		return cfg.SelectProfile(normalizedEmail)
+	}
+
+	var candidates []string
+	for _, domain := range mailDomainsFromHost(host) {
+		candidates = append(candidates, "user@"+domain)
+	}
+	return cfg.selectProfileCandidates(profileCandidates{emailAddresses: candidates})
+}
+
+type profileCandidates struct {
+	emailAddresses []string
+}
+
+func (cfg MailAccount) selectProfileCandidates(candidates profileCandidates) MailAccountProfile {
 	var defaultProfile MailAccountProfile
 	var bestProfile MailAccountProfile
 	var bestScore profileMatchScore
@@ -60,11 +81,18 @@ func (cfg MailAccount) SelectProfile(emailAddress string) MailAccountProfile {
 			defaultProfile = profile
 			continue
 		}
-		if normalizedEmail == "" {
+		if len(candidates.emailAddresses) == 0 {
 			continue
 		}
-		matched, err := path.Match(match, normalizedEmail)
-		if err != nil || !matched {
+		matched := false
+		for _, candidate := range candidates.emailAddresses {
+			ok, err := path.Match(match, candidate)
+			if err == nil && ok {
+				matched = true
+				break
+			}
+		}
+		if !matched {
 			continue
 		}
 
@@ -80,6 +108,55 @@ func (cfg MailAccount) SelectProfile(emailAddress string) MailAccountProfile {
 		return bestProfile
 	}
 	return defaultProfile
+}
+
+func mailDomainsFromHost(host string) []string {
+	host = normalizeRequestHost(host)
+	if host == "" {
+		return nil
+	}
+	candidates := []string{host}
+	for _, prefix := range []string{"autoconfig.", "autodiscover."} {
+		if strings.HasPrefix(host, prefix) {
+			candidates = append(candidates, strings.TrimPrefix(host, prefix))
+		}
+	}
+	return uniqueStrings(candidates)
+}
+
+func normalizeRequestHost(host string) string {
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "" {
+		return ""
+	}
+	if first, _, ok := strings.Cut(host, ","); ok {
+		host = strings.TrimSpace(first)
+	}
+	if strings.HasPrefix(host, "[") {
+		if end := strings.Index(host, "]"); end >= 0 {
+			return strings.Trim(host[:end+1], "[]")
+		}
+	}
+	if withoutPort, _, ok := strings.Cut(host, ":"); ok {
+		host = withoutPort
+	}
+	return strings.TrimSuffix(host, ".")
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	var unique []string
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	return unique
 }
 
 func (cfg MailAccount) ManualSetupURL() string {

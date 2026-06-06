@@ -125,12 +125,20 @@ truth:
 }
 ```
 
-Profile matching uses the request's `emailaddress` query parameter. The profile
-with `match: "default"` is required and is used when no other profile matches.
-All other `match` values are case-insensitive glob patterns against the full
-email address; `*` matches any sequence and `?` matches one character. More
-literal characters beat fewer literal characters, fewer wildcards break that
-tie, and config order breaks any remaining tie.
+Profile matching first uses the email address supplied by the client, for
+example the `emailaddress` query parameter or the Outlook Autodiscover request
+body. The profile with `match: "default"` is required and is used when no other
+profile matches. All other `match` values are case-insensitive glob patterns
+against the full email address; `*` matches any sequence and `?` matches one
+character. More literal characters beat fewer literal characters, fewer
+wildcards break that tie, and config order breaks any remaining tie.
+
+If the client does not supply an email address, the overlay falls back to the
+HTTP `Host` value. It tries the host as a mail domain, and also strips the
+standard discovery prefixes `autoconfig.` and `autodiscover.` before matching.
+For example, `Host: autoconfig.example.org` can select a profile with
+`match: "*@example.org"`. When both an email address and `Host` are available,
+the email address wins.
 
 When enabled, the module owns these exact Thunderbird routes:
 

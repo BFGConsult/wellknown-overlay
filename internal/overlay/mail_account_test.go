@@ -52,3 +52,43 @@ func TestMailAccountSelectProfileFallsBackToDefault(t *testing.T) {
 		t.Fatalf("selected %q, want Default", profile.DisplayName)
 	}
 }
+
+func TestMailAccountSelectProfileForRequestUsesHostWhenEmailMissing(t *testing.T) {
+	account := MailAccount{Profiles: []MailAccountProfile{
+		testMailAccountProfile("*@invest.example.org", "Invest"),
+		testMailAccountProfile("*@consult.example.org", "Consult"),
+		testMailAccountProfile("default", "Default"),
+	}}
+
+	profile := account.SelectProfileForRequest("", "consult.example.org")
+	if profile.DisplayName != "Consult" {
+		t.Fatalf("selected %q, want Consult", profile.DisplayName)
+	}
+}
+
+func TestMailAccountSelectProfileForRequestStripsDiscoveryHostPrefix(t *testing.T) {
+	account := MailAccount{Profiles: []MailAccountProfile{
+		testMailAccountProfile("*@example.org", "Root"),
+		testMailAccountProfile("default", "Default"),
+	}}
+
+	for _, host := range []string{"autoconfig.example.org", "autodiscover.example.org"} {
+		profile := account.SelectProfileForRequest("", host)
+		if profile.DisplayName != "Root" {
+			t.Fatalf("host %q selected %q, want Root", host, profile.DisplayName)
+		}
+	}
+}
+
+func TestMailAccountSelectProfileForRequestEmailBeatsHost(t *testing.T) {
+	account := MailAccount{Profiles: []MailAccountProfile{
+		testMailAccountProfile("*@invest.example.org", "Invest"),
+		testMailAccountProfile("*@consult.example.org", "Consult"),
+		testMailAccountProfile("default", "Default"),
+	}}
+
+	profile := account.SelectProfileForRequest("person@invest.example.org", "consult.example.org")
+	if profile.DisplayName != "Invest" {
+		t.Fatalf("selected %q, want Invest", profile.DisplayName)
+	}
+}

@@ -36,7 +36,7 @@ func NewHTTPHandler(responder *Responder) http.Handler {
 			}
 		}
 
-		response, err := responder.RenderHTTPRequest(r.URL.Path, r.URL.RawQuery, body, publicBaseURL(r))
+		response, err := responder.RenderHTTPRequestForHost(r.URL.Path, r.URL.RawQuery, body, publicBaseURL(r), requestHost(r))
 		if errors.Is(err, ErrNotFound) {
 			http.NotFound(w, r)
 			return
@@ -64,12 +64,17 @@ func publicBaseURL(r *http.Request) string {
 			proto = "http"
 		}
 	}
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Host
-	}
+	host := requestHost(r)
 	if host == "" {
 		return ""
 	}
 	return proto + "://" + host
+}
+
+func requestHost(r *http.Request) string {
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	return host
 }
