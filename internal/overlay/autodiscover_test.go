@@ -6,7 +6,7 @@ import (
 )
 
 func TestRenderAutodiscoverUsesMailAccountSettings(t *testing.T) {
-	body, err := RenderAutodiscover(testMailAccount().SelectProfile("bfg@efn.no"), "bfg@efn.no")
+	body, err := RenderAutodiscover(testMailAccount().SelectProfile("bfg@example.org"), "bfg@example.org")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -16,13 +16,13 @@ func TestRenderAutodiscoverUsesMailAccountSettings(t *testing.T) {
 		`<Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/responseschema/2006">`,
 		`<Response xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a">`,
 		"<DisplayName>EFN</DisplayName>",
-		"<EmailAddress>bfg@efn.no</EmailAddress>",
+		"<EmailAddress>bfg@example.org</EmailAddress>",
 		"<AccountType>email</AccountType>",
 		"<Action>settings</Action>",
 		"<Type>IMAP</Type>",
-		"<Server>login.kristshell.net</Server>",
+		"<Server>mail.example.org</Server>",
 		"<Port>993</Port>",
-		"<LoginName>bfg@efn.no</LoginName>",
+		"<LoginName>bfg@example.org</LoginName>",
 		"<SSL>on</SSL>",
 		"<Type>SMTP</Type>",
 		"<Port>587</Port>",
@@ -42,12 +42,12 @@ func TestEmailAddressFromAutodiscoverRequest(t *testing.T) {
 	body := []byte(`<?xml version="1.0"?>
 <Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/requestschema/2006">
   <Request>
-    <EMailAddress>person+help@efn.no</EMailAddress>
+    <EMailAddress>person+help@example.org</EMailAddress>
     <AcceptableResponseSchema>http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a</AcceptableResponseSchema>
   </Request>
 </Autodiscover>`)
 
-	if got, want := EmailAddressFromAutodiscoverRequest(body), "person+help@efn.no"; got != want {
+	if got, want := EmailAddressFromAutodiscoverRequest(body), "person+help@example.org"; got != want {
 		t.Fatalf("email = %q, want %q", got, want)
 	}
 }

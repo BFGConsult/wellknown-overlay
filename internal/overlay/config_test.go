@@ -64,7 +64,7 @@ func TestConfigValidateRejectsIncompleteMailAccount(t *testing.T) {
 
 func TestConfigValidateRejectsMailAccountWithoutDefaultProfile(t *testing.T) {
 	account := testMailAccount()
-	account.Profiles[0].Match = "*@efn.no"
+	account.Profiles[0].Match = "*@example.org"
 
 	cfg := Config{MailAccount: account}
 	if err := cfg.Validate(); err == nil {
@@ -74,7 +74,7 @@ func TestConfigValidateRejectsMailAccountWithoutDefaultProfile(t *testing.T) {
 
 func TestConfigValidateRejectsInvalidProfileMatch(t *testing.T) {
 	account := testMailAccount()
-	account.Profiles[0].Match = "efn.no"
+	account.Profiles[0].Match = "example.org"
 
 	cfg := Config{MailAccount: account}
 	if err := cfg.Validate(); err == nil {
@@ -84,7 +84,7 @@ func TestConfigValidateRejectsInvalidProfileMatch(t *testing.T) {
 
 func TestConfigValidateRejectsUnsupportedProfileGlobSyntax(t *testing.T) {
 	account := testMailAccount()
-	account.Profiles[0].Match = "[ab]@efn.no"
+	account.Profiles[0].Match = "[ab]@example.org"
 
 	cfg := Config{MailAccount: account}
 	if err := cfg.Validate(); err == nil {
@@ -117,7 +117,7 @@ func testMailAccount() *MailAccount {
 func testMailAccountWithManualSetup() *MailAccount {
 	account := testMailAccount()
 	account.ManualSetup = &MailManualSetupConfig{
-		URL: "https://autoconfig.efn.no/mail/setup",
+		URL: "https://autoconfig.example.org/mail/setup",
 	}
 	return account
 }
@@ -131,11 +131,11 @@ func testMailAccountWithSharePreview() *MailAccount {
 func testMailAccountProfile(match, displayName string) MailAccountProfile {
 	return MailAccountProfile{
 		Match:       match,
-		Domain:      "efn.no",
+		Domain:      "example.org",
 		DisplayName: displayName,
 		Incoming: EmailServerConfig{
 			Type:           "imap",
-			Hostname:       "login.kristshell.net",
+			Hostname:       "mail.example.org",
 			Port:           993,
 			SocketType:     "SSL",
 			Authentication: "password-cleartext",
@@ -143,7 +143,7 @@ func testMailAccountProfile(match, displayName string) MailAccountProfile {
 		},
 		Outgoing: EmailServerConfig{
 			Type:           "smtp",
-			Hostname:       "login.kristshell.net",
+			Hostname:       "mail.example.org",
 			Port:           587,
 			SocketType:     "STARTTLS",
 			Authentication: "password-cleartext",

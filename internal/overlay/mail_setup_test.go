@@ -7,7 +7,7 @@ import (
 )
 
 func TestRenderMailSetupUsesEnglishTemplateAndEmailAddress(t *testing.T) {
-	body, lang, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "bfg@efn.no", "en", "")
+	body, lang, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "bfg@example.org", "en", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,9 +19,9 @@ func TestRenderMailSetupUsesEnglishTemplateAndEmailAddress(t *testing.T) {
 	for _, want := range []string{
 		"<h1>Email setup for EFN</h1>",
 		`<meta name="description" content="Email settings, automatic setup, and password information.">`,
-		"Your email address: bfg@efn.no",
-		"<td>Server name</td><td>login.kristshell.net</td>",
-		"<td>Username</td><td>bfg@efn.no</td>",
+		"Your email address: bfg@example.org",
+		"<td>Server name</td><td>mail.example.org</td>",
+		"<td>Username</td><td>bfg@example.org</td>",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("body does not contain %q:\n%s", want, got)
@@ -61,7 +61,7 @@ func TestRenderMailSetupUsesNorwegianPOTranslation(t *testing.T) {
 		"<h1>E-postoppsett for EFN</h1>",
 		`<meta name="description" content="E-postinnstillinger, automatisk oppsett og passordinformasjon.">`,
 		"Din e-postadresse: din fulle e-postadresse",
-		"<td>Servernavn</td><td>login.kristshell.net</td>",
+		"<td>Servernavn</td><td>mail.example.org</td>",
 		"<td>Brukernavn</td><td>din fulle e-postadresse</td>",
 	} {
 		if !strings.Contains(got, want) {
@@ -71,7 +71,7 @@ func TestRenderMailSetupUsesNorwegianPOTranslation(t *testing.T) {
 }
 
 func TestRenderMailSetupAddsSharePreviewMetadataWhenImageURLIsSet(t *testing.T) {
-	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "bfg@efn.no", "en", "https://autoconfig.example.org/mail/setup-og.png?lang=en")
+	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "bfg@example.org", "en", "https://autoconfig.example.org/mail/setup-og.png?lang=en")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestRenderMailSetupAllowsRootTemplateOverride(t *testing.T) {
 	}
 
 	got := string(body)
-	if !strings.Contains(got, "<p>Custom EFN login.kristshell.net</p>") {
+	if !strings.Contains(got, "<p>Custom EFN mail.example.org</p>") {
 		t.Fatalf("body = %q", got)
 	}
 }
@@ -116,7 +116,7 @@ func TestRenderMailSetupAppendsExtraSectionsWithMarkdownLinksAndLists(t *testing
 		},
 	}
 
-	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), manualSetup, "bfg@efn.no", "en", "")
+	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), manualSetup, "bfg@example.org", "en", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestRenderMailSetupFiltersExtraSectionsByLanguage(t *testing.T) {
 		},
 	}
 
-	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), manualSetup, "bfg@efn.no", "nb-NO", "")
+	body, _, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), manualSetup, "bfg@example.org", "nb-NO", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -76,18 +76,18 @@ func TestResponderRendersMailAccountRoutes(t *testing.T) {
 
 	body := string(wellKnownResponse.Body)
 	wantSubstrings := []string{
-		`<emailProvider id="efn.no">`,
-		"<domain>efn.no</domain>",
+		`<emailProvider id="example.org">`,
+		"<domain>example.org</domain>",
 		"<displayName>EFN</displayName>",
 		`<incomingServer type="imap">`,
-		"<hostname>login.kristshell.net</hostname>",
+		"<hostname>mail.example.org</hostname>",
 		"<port>993</port>",
 		"<socketType>SSL</socketType>",
 		`<outgoingServer type="smtp">`,
 		"<port>587</port>",
 		"<socketType>STARTTLS</socketType>",
 		"<username>%EMAILADDRESS%</username>",
-		`<documentation url="https://autoconfig.efn.no/mail/setup">`,
+		`<documentation url="https://autoconfig.example.org/mail/setup">`,
 		`<descr lang="en">Manual email setup instructions</descr>`,
 	}
 	for _, want := range wantSubstrings {
@@ -102,7 +102,7 @@ func TestResponderRendersMailSetupRoute(t *testing.T) {
 		MailAccount: testMailAccount(),
 	}, fstest.MapFS{})
 
-	response, err := responder.RenderRequest(MailSetupPath, "emailaddress=bfg@efn.no&lang=nb")
+	response, err := responder.RenderRequest(MailSetupPath, "emailaddress=bfg@example.org&lang=nb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestResponderRendersMailSetupRoute(t *testing.T) {
 		t.Fatalf("content type = %q, want text/html", response.ContentType)
 	}
 	body := string(response.Body)
-	if !strings.Contains(body, "<h1>E-postoppsett for EFN</h1>") || !strings.Contains(body, "bfg@efn.no") {
+	if !strings.Contains(body, "<h1>E-postoppsett for EFN</h1>") || !strings.Contains(body, "bfg@example.org") {
 		t.Fatalf("manual setup body does not contain expected content:\n%s", body)
 	}
 }
@@ -124,7 +124,7 @@ func TestResponderRendersAppleMobileconfigRoute(t *testing.T) {
 		MailAccount: testMailAccount(),
 	}, fstest.MapFS{})
 
-	response, err := responder.RenderRequest(AppleMobileconfigPath, "emailaddress=bfg@efn.no")
+	response, err := responder.RenderRequest(AppleMobileconfigPath, "emailaddress=bfg@example.org")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestResponderRendersAppleMobileconfigRoute(t *testing.T) {
 		t.Fatalf("content type = %q, want application/x-apple-aspen-config", response.ContentType)
 	}
 	body := string(response.Body)
-	if !strings.Contains(body, "<key>EmailAddress</key>") || !strings.Contains(body, "<string>bfg@efn.no</string>") {
+	if !strings.Contains(body, "<key>EmailAddress</key>") || !strings.Contains(body, "<string>bfg@example.org</string>") {
 		t.Fatalf("mobileconfig does not contain substituted email address:\n%s", body)
 	}
 }
@@ -148,7 +148,7 @@ func TestResponderRendersAutodiscoverRoute(t *testing.T) {
 
 	response, err := responder.RenderRequestBody(AutodiscoverPath, "", []byte(`<Autodiscover>
   <Request>
-    <EMailAddress>bfg@efn.no</EMailAddress>
+    <EMailAddress>bfg@example.org</EMailAddress>
   </Request>
 </Autodiscover>`))
 	if err != nil {
@@ -162,22 +162,22 @@ func TestResponderRendersAutodiscoverRoute(t *testing.T) {
 		t.Fatalf("content type = %q, want application/xml", response.ContentType)
 	}
 	body := string(response.Body)
-	if !strings.Contains(body, "<LoginName>bfg@efn.no</LoginName>") {
+	if !strings.Contains(body, "<LoginName>bfg@example.org</LoginName>") {
 		t.Fatalf("autodiscover does not contain substituted login name:\n%s", body)
 	}
 }
 
 func TestResponderSelectsMailAccountProfileFromEmailAddress(t *testing.T) {
 	account := MailAccount{Profiles: []MailAccountProfile{
-		testMailAccountProfile("*@efn.no", "EFN"),
-		testMailAccountProfile("*+help@efn.no", "Helpdesk"),
+		testMailAccountProfile("*@example.org", "EFN"),
+		testMailAccountProfile("*+help@example.org", "Helpdesk"),
 		testMailAccountProfile("default", "Default"),
 	}}
-	account.Profiles[1].Incoming.Username = "help@efn.no"
-	account.Profiles[1].Outgoing.Username = "help@efn.no"
+	account.Profiles[1].Incoming.Username = "help@example.org"
+	account.Profiles[1].Outgoing.Username = "help@example.org"
 
 	responder := NewResponder(Config{MailAccount: &account}, fstest.MapFS{})
-	response, err := responder.RenderRequest(ThunderbirdAutoconfigWellKnownPath, "emailaddress=person+help@efn.no")
+	response, err := responder.RenderRequest(ThunderbirdAutoconfigWellKnownPath, "emailaddress=person+help@example.org")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,24 +186,24 @@ func TestResponderSelectsMailAccountProfileFromEmailAddress(t *testing.T) {
 	if !strings.Contains(body, "<displayName>Helpdesk</displayName>") {
 		t.Fatalf("body does not use selected profile:\n%s", body)
 	}
-	if !strings.Contains(body, "<username>help@efn.no</username>") {
+	if !strings.Contains(body, "<username>help@example.org</username>") {
 		t.Fatalf("body does not use selected profile username:\n%s", body)
 	}
 }
 
 func TestResponderSelectsAutodiscoverProfileFromRequestBody(t *testing.T) {
 	account := MailAccount{Profiles: []MailAccountProfile{
-		testMailAccountProfile("*@efn.no", "EFN"),
-		testMailAccountProfile("*+help@efn.no", "Helpdesk"),
+		testMailAccountProfile("*@example.org", "EFN"),
+		testMailAccountProfile("*+help@example.org", "Helpdesk"),
 		testMailAccountProfile("default", "Default"),
 	}}
-	account.Profiles[1].Incoming.Username = "help@efn.no"
-	account.Profiles[1].Outgoing.Username = "help@efn.no"
+	account.Profiles[1].Incoming.Username = "help@example.org"
+	account.Profiles[1].Outgoing.Username = "help@example.org"
 
 	responder := NewResponder(Config{MailAccount: &account}, fstest.MapFS{})
 	response, err := responder.RenderRequestBody(AutodiscoverPath, "", []byte(`<Autodiscover>
   <Request>
-    <EMailAddress>person+help@efn.no</EMailAddress>
+    <EMailAddress>person+help@example.org</EMailAddress>
   </Request>
 </Autodiscover>`))
 	if err != nil {
@@ -214,7 +214,7 @@ func TestResponderSelectsAutodiscoverProfileFromRequestBody(t *testing.T) {
 	if !strings.Contains(body, "<DisplayName>Helpdesk</DisplayName>") {
 		t.Fatalf("body does not use selected profile:\n%s", body)
 	}
-	if !strings.Contains(body, "<LoginName>help@efn.no</LoginName>") {
+	if !strings.Contains(body, "<LoginName>help@example.org</LoginName>") {
 		t.Fatalf("body does not use selected profile username:\n%s", body)
 	}
 }

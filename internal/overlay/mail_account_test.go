@@ -4,12 +4,12 @@ import "testing"
 
 func TestMailAccountSelectProfileChoosesExactBeforeWildcard(t *testing.T) {
 	account := MailAccount{Profiles: []MailAccountProfile{
-		testMailAccountProfile("*@efn.no", "Wildcard"),
-		testMailAccountProfile("bfg@efn.no", "Exact"),
+		testMailAccountProfile("*@example.org", "Wildcard"),
+		testMailAccountProfile("bfg@example.org", "Exact"),
 		testMailAccountProfile("default", "Default"),
 	}}
 
-	profile := account.SelectProfile("BFG@EFN.NO")
+	profile := account.SelectProfile("BFG@EXAMPLE.ORG")
 	if profile.DisplayName != "Exact" {
 		t.Fatalf("selected %q, want Exact", profile.DisplayName)
 	}
@@ -17,12 +17,12 @@ func TestMailAccountSelectProfileChoosesExactBeforeWildcard(t *testing.T) {
 
 func TestMailAccountSelectProfileChoosesMoreSpecificGlob(t *testing.T) {
 	account := MailAccount{Profiles: []MailAccountProfile{
-		testMailAccountProfile("*@efn.no", "Domain"),
-		testMailAccountProfile("*+bfg@efn.no", "Tagged"),
+		testMailAccountProfile("*@example.org", "Domain"),
+		testMailAccountProfile("*+bfg@example.org", "Tagged"),
 		testMailAccountProfile("default", "Default"),
 	}}
 
-	profile := account.SelectProfile("post+bfg@efn.no")
+	profile := account.SelectProfile("post+bfg@example.org")
 	if profile.DisplayName != "Tagged" {
 		t.Fatalf("selected %q, want Tagged", profile.DisplayName)
 	}
@@ -30,12 +30,12 @@ func TestMailAccountSelectProfileChoosesMoreSpecificGlob(t *testing.T) {
 
 func TestMailAccountSelectProfileUsesFirstMatchAsTieBreaker(t *testing.T) {
 	account := MailAccount{Profiles: []MailAccountProfile{
-		testMailAccountProfile("*+bfg@efn.no", "First"),
-		testMailAccountProfile("tag+*@efn.no", "Second"),
+		testMailAccountProfile("*+bfg@example.org", "First"),
+		testMailAccountProfile("tag+*@example.org", "Second"),
 		testMailAccountProfile("default", "Default"),
 	}}
 
-	profile := account.SelectProfile("tag+bfg@efn.no")
+	profile := account.SelectProfile("tag+bfg@example.org")
 	if profile.DisplayName != "First" {
 		t.Fatalf("selected %q, want First", profile.DisplayName)
 	}
@@ -43,11 +43,11 @@ func TestMailAccountSelectProfileUsesFirstMatchAsTieBreaker(t *testing.T) {
 
 func TestMailAccountSelectProfileFallsBackToDefault(t *testing.T) {
 	account := MailAccount{Profiles: []MailAccountProfile{
-		testMailAccountProfile("*@efn.no", "Domain"),
+		testMailAccountProfile("*@example.org", "Domain"),
 		testMailAccountProfile("default", "Default"),
 	}}
 
-	profile := account.SelectProfile("person@example.org")
+	profile := account.SelectProfile("person@other.example")
 	if profile.DisplayName != "Default" {
 		t.Fatalf("selected %q, want Default", profile.DisplayName)
 	}

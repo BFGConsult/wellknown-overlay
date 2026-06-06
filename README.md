@@ -65,7 +65,7 @@ truth:
 {
   "mail_account": {
     "manual_setup": {
-      "url": "https://autoconfig.efn.no/mail/setup",
+      "url": "https://autoconfig.example.org/mail/setup",
       "share_preview": {
         "enabled": true
       },
@@ -79,33 +79,33 @@ truth:
     },
     "profiles": [
       {
-        "match": "*+bfg@efn.no",
-        "domain": "efn.no",
-        "display_name": "EFN",
+        "match": "*+bfg@example.org",
+        "domain": "example.org",
+        "display_name": "Example Mail",
         "incoming": {
           "type": "imap",
-          "hostname": "login.kristshell.net",
+          "hostname": "mail.example.org",
           "port": 993,
           "socket_type": "SSL",
           "authentication": "password-cleartext",
-          "username": "bfg@efn.no"
+          "username": "bfg@example.org"
         },
         "outgoing": {
           "type": "smtp",
-          "hostname": "login.kristshell.net",
+          "hostname": "mail.example.org",
           "port": 587,
           "socket_type": "STARTTLS",
           "authentication": "password-cleartext",
-          "username": "bfg@efn.no"
+          "username": "bfg@example.org"
         }
       },
       {
         "match": "default",
-        "domain": "efn.no",
-        "display_name": "EFN",
+        "domain": "example.org",
+        "display_name": "Example Mail",
         "incoming": {
           "type": "imap",
-          "hostname": "login.kristshell.net",
+          "hostname": "mail.example.org",
           "port": 993,
           "socket_type": "SSL",
           "authentication": "password-cleartext",
@@ -113,7 +113,7 @@ truth:
         },
         "outgoing": {
           "type": "smtp",
-          "hostname": "login.kristshell.net",
+          "hostname": "mail.example.org",
           "port": 587,
           "socket_type": "STARTTLS",
           "authentication": "password-cleartext",
@@ -227,6 +227,9 @@ go run ./cmd/wellknown-overlay-livecheck user@example.org THUNDERBIRD,OUTLOOK
 go run ./cmd/wellknown-overlay-livecheck -insecure user@example.org APPLE
 go run ./cmd/wellknown-overlay-livecheck -skip-mail-auth-dns user@example.org
 go run ./cmd/wellknown-overlay-livecheck -dkim-selectors mail2026,default user@example.org
+LIVECHECK_PASSWORD='...' go run ./cmd/wellknown-overlay-livecheck -round-trip user@example.org
+go run ./cmd/wellknown-overlay-livecheck -livecheck-config .local/livecheck.local -round-trip user@example.org
+go run ./cmd/wellknown-overlay-livecheck -livecheck-config .local/livecheck.local -round-trip
 ```
 
 `wellknown-overlay-livecheck` is a diagnostic companion tool. It derives the
@@ -245,6 +248,33 @@ SPF and DMARC are checked via TXT records. DKIM selector DNS records are checked
 when selectors are supplied with `-dkim-selectors` or `DKIM_SELECTORS`.
 End-to-end DKIM message signing is still reported as not tested. Use
 `-skip-mail-auth-dns` to suppress these advisory mail-auth checks.
+
+Round-trip testing is opt-in with `-round-trip`. It uses the discovered
+Thunderbird Autoconfig IMAP/SMTP settings, sends a unique message to the tested
+address, polls `INBOX` until that message arrives, and deletes the test message
+unless `-round-trip-keep-message` is set. If `LIVECHECK_RECEIVER_EMAIL` is set,
+the message is sent from the tested address to that separate receiver mailbox
+instead; this is useful for checking externally delivered DKIM signatures. If no
+receiver is configured, the tested address is used for both sending and
+receiving. The sender password is read from `LIVECHECK_PASSWORD`,
+`-livecheck-config`, or prompted interactively with hidden input. A separate
+receiver mailbox requires `LIVECHECK_RECEIVER_PASSWORD`. Unlike the advisory DNS
+checks, a requested round-trip failure exits non-zero.
+
+`-livecheck-config` reads a local `KEY=value` file. It supports
+`LIVECHECK_EMAIL`, `LIVECHECK_PASSWORD`, `LIVECHECK_RECEIVER_EMAIL`,
+`LIVECHECK_RECEIVER_PASSWORD`, and `DKIM_SELECTORS`; environment variables
+override file values, and a positional email argument overrides
+`LIVECHECK_EMAIL`. Keep this file outside version control, for example under
+`.local/`.
+
+```sh
+LIVECHECK_EMAIL='sender@example.org'
+LIVECHECK_PASSWORD='sender password'
+LIVECHECK_RECEIVER_EMAIL='receiver@example.net'
+LIVECHECK_RECEIVER_PASSWORD='receiver password'
+DKIM_SELECTORS='mail2026,default'
+```
 
 See `COVERAGE.md` for expected and manually verified mail-client discovery
 support.

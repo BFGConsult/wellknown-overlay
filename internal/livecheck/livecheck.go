@@ -33,6 +33,7 @@ type Options struct {
 	Verbose         bool
 	SkipMailAuthDNS bool
 	DKIMSelectors   []string
+	RoundTrip       RoundTripOptions
 	Timeout         time.Duration
 }
 
@@ -41,6 +42,9 @@ type Checker struct {
 	LookupHost func(context.Context, string) ([]string, error)
 	LookupSRV  func(context.Context, string, string, string) (string, []*net.SRV, error)
 	LookupTXT  func(context.Context, string) ([]string, error)
+	SendMail   func(context.Context, roundTripMessage, mailServerSettings, string, string, bool) error
+	PollIMAP   func(context.Context, roundTripMessage, mailServerSettings, string, string, bool, time.Duration, bool) (roundTripReceipt, error)
+	Now        func() time.Time
 	Stdout     io.Writer
 }
 
@@ -149,6 +153,15 @@ func runWithChecker(ctx context.Context, opts Options, stdout io.Writer, checker
 		mailAuthResult := checker.CheckMailAuthDNS(ctx, domain, opts.DKIMSelectors)
 		writeResult(stdout, mailAuthResult, true)
 		advisoryWarnings = len(mailAuthResult.Problems) > 0
+	}
+	if opts.RoundTrip.Enabled {
+		roundTripResult := checker.CheckRoundTrip(ctx, email, domain, opts.RoundTrip)
+		writeResult(stdout, roundTripResult, true)
+		if !roundTripResult.Passed {
+			allPassed = false
+		} else if len(roundTripResult.Problems) > 0 {
+			advisoryWarnings = true
+		}
 	}
 
 	if allPassed {
@@ -437,10 +450,12 @@ type mailSettings struct {
 }
 
 type mailServerSettings struct {
-	Type       string
-	Hostname   string
-	Port       uint16
-	SocketType string
+	Type           string
+	Hostname       string
+	Port           uint16
+	SocketType     string
+	Authentication string
+	Username       string
 }
 
 func (c Checker) describeDNS(ctx context.Context, host string) []string {
@@ -626,6 +641,10 @@ func decodeThunderbirdServer(decoder *xml.Decoder, start xml.StartElement) (mail
 				server.Port = uint16(port)
 			case "socketType":
 				server.SocketType = strings.TrimSpace(value)
+			case "authentication":
+				server.Authentication = strings.TrimSpace(value)
+			case "username":
+				server.Username = strings.TrimSpace(value)
 			}
 		}
 	}

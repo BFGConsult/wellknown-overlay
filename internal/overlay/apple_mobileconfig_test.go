@@ -6,7 +6,7 @@ import (
 )
 
 func TestRenderAppleMobileconfigUsesMailAccountSettings(t *testing.T) {
-	body, err := RenderAppleMobileconfig(testMailAccount().SelectProfile("bfg@efn.no"), "bfg@efn.no")
+	body, err := RenderAppleMobileconfig(testMailAccount().SelectProfile("bfg@example.org"), "bfg@example.org")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -17,17 +17,17 @@ func TestRenderAppleMobileconfigUsesMailAccountSettings(t *testing.T) {
 		"<key>PayloadType</key>",
 		"<string>com.apple.mail.managed</string>",
 		"<key>EmailAddress</key>",
-		"<string>bfg@efn.no</string>",
+		"<string>bfg@example.org</string>",
 		"<key>EmailAccountType</key>",
 		"<string>EmailTypeIMAP</string>",
 		"<key>IncomingMailServerHostName</key>",
-		"<string>login.kristshell.net</string>",
+		"<string>mail.example.org</string>",
 		"<key>IncomingMailServerPortNumber</key>",
 		"<integer>993</integer>",
 		"<key>IncomingMailServerUseSSL</key>",
 		"<true/>",
 		"<key>IncomingMailServerUsername</key>",
-		"<string>bfg@efn.no</string>",
+		"<string>bfg@example.org</string>",
 		"<key>OutgoingMailServerPortNumber</key>",
 		"<integer>587</integer>",
 		"<key>OutgoingPasswordSameAsIncomingPassword</key>",
@@ -40,10 +40,10 @@ func TestRenderAppleMobileconfigUsesMailAccountSettings(t *testing.T) {
 }
 
 func TestRenderAppleMobileconfigEscapesXML(t *testing.T) {
-	cfg := testMailAccount().SelectProfile("person+test@efn.no")
+	cfg := testMailAccount().SelectProfile("person+test@example.org")
 	cfg.DisplayName = "A&B <Mail>"
 
-	body, err := RenderAppleMobileconfig(cfg, "person+test@efn.no")
+	body, err := RenderAppleMobileconfig(cfg, "person+test@example.org")
 	if err != nil {
 		t.Fatal(err)
 	}

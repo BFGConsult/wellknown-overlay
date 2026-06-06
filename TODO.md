@@ -2,8 +2,6 @@
 
 Current backlog from the deployment/autoconfig work:
 
-- Use `autotest@efn.no` as the dedicated EFN live/manual testing address in
-  future examples, livecheck runs, and client verification notes.
 - Improve the gateway's overlay-only `index.html` into a small explanatory
   page that links to relevant standards documents and, once public, the
   wellknown-overlay project.

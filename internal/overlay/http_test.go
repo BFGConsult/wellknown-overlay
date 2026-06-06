@@ -52,7 +52,7 @@ func TestHTTPHandlerAcceptsAutodiscoverPost(t *testing.T) {
 
 	body := []byte(`<Autodiscover>
   <Request>
-    <EMailAddress>bfg@efn.no</EMailAddress>
+    <EMailAddress>bfg@example.org</EMailAddress>
   </Request>
 </Autodiscover>`)
 	req := httptest.NewRequest(http.MethodPost, AutodiscoverPath, bytes.NewReader(body))
@@ -70,7 +70,7 @@ func TestHTTPHandlerAcceptsAutodiscoverPost(t *testing.T) {
 	if got := resp.Header.Get("Content-Type"); got != "application/xml" {
 		t.Fatalf("content type = %q, want application/xml", got)
 	}
-	if !strings.Contains(rec.Body.String(), "<LoginName>bfg@efn.no</LoginName>") {
+	if !strings.Contains(rec.Body.String(), "<LoginName>bfg@example.org</LoginName>") {
 		t.Fatalf("body does not contain substituted login:\n%s", rec.Body.String())
 	}
 }
