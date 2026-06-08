@@ -260,6 +260,8 @@ warnings; the default minimum is `3600` seconds and can also be set with
 By default it also reports advisory SPF, DMARC, and DKIM mail-auth DNS status.
 SPF and DMARC are checked via TXT records. DKIM selector DNS records are checked
 when selectors are supplied with `-dkim-selectors` or `DKIM_SELECTORS`.
+Authoritative TTL warnings also apply to matching SPF, DMARC, and configured
+DKIM TXT records.
 End-to-end DKIM message signing is still reported as not tested. Use
 `-skip-mail-auth-dns` to suppress these advisory mail-auth checks.
 

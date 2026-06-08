@@ -250,6 +250,8 @@ func dnsAnswerString(rr dns.RR) string {
 		return fmt.Sprintf("%d %d %d %s", record.Priority, record.Weight, record.Port, dnsTarget(record.Target))
 	case *dns.SOA:
 		return fmt.Sprintf("%s %s %d %d %d %d %d", dnsTarget(record.Ns), dnsTarget(record.Mbox), record.Serial, record.Refresh, record.Retry, record.Expire, record.Minttl)
+	case *dns.TXT:
+		return strings.Join(record.Txt, "")
 	default:
 		return strings.TrimSpace(rr.String())
 	}

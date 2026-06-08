@@ -163,7 +163,7 @@ func runWithChecker(ctx context.Context, opts Options, stdout io.Writer, checker
 	writeResult(stdout, authoritativeDNSResult, true)
 	advisoryWarnings := len(authoritativeDNSResult.Problems) > 0
 	if !opts.SkipMailAuthDNS {
-		mailAuthResult := checker.CheckMailAuthDNS(ctx, domain, opts.DKIMSelectors)
+		mailAuthResult := checker.CheckMailAuthDNS(ctx, domain, opts.DKIMSelectors, minDNSTTL)
 		writeResult(stdout, mailAuthResult, true)
 		if len(mailAuthResult.Problems) > 0 {
 			advisoryWarnings = true

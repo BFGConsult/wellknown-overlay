@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/miekg/dns"
 )
 
 func TestCheckMailAuthDNSReportsValidSPFAndDMARC(t *testing.T) {
@@ -15,7 +18,7 @@ func TestCheckMailAuthDNSReportsValidSPFAndDMARC(t *testing.T) {
 		"_dmarc.example.org": {"v=DMARC1; p=reject; rua=mailto:dmarc@example.org"},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil)
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil, 0)
 	if !result.Passed {
 		t.Fatalf("mail auth DNS should be advisory-only: %#v", result)
 	}
@@ -42,7 +45,7 @@ func TestCheckMailAuthDNSReportsMissingSPF(t *testing.T) {
 		"_dmarc.example.org": {"v=DMARC1; p=none"},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil)
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil, 0)
 	if !containsDetail(result.Details, "SPF example.org: missing") {
 		t.Fatalf("expected missing SPF detail in %#v", result.Details)
 	}
@@ -57,7 +60,7 @@ func TestCheckMailAuthDNSReportsMultipleSPFRecords(t *testing.T) {
 		"_dmarc.example.org": {"v=DMARC1; p=none"},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil)
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil, 0)
 	if !containsDetail(result.Details, "SPF example.org: multiple SPF records found") {
 		t.Fatalf("expected multiple SPF detail in %#v", result.Details)
 	}
@@ -71,7 +74,7 @@ func TestCheckMailAuthDNSReportsMissingDMARC(t *testing.T) {
 		"example.org": {"v=spf1 mx -all"},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil)
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil, 0)
 	if !containsDetail(result.Details, "DMARC _dmarc.example.org: missing") {
 		t.Fatalf("expected missing DMARC detail in %#v", result.Details)
 	}
@@ -86,7 +89,7 @@ func TestCheckMailAuthDNSReportsMultipleDMARCRecords(t *testing.T) {
 		"_dmarc.example.org": {"v=DMARC1; p=none", "v=DMARC1; p=reject"},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil)
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil, 0)
 	if !containsDetail(result.Details, "DMARC _dmarc.example.org: multiple DMARC records found") {
 		t.Fatalf("expected multiple DMARC detail in %#v", result.Details)
 	}
@@ -98,7 +101,7 @@ func TestCheckMailAuthDNSReportsDMARCWithoutPolicy(t *testing.T) {
 		"_dmarc.example.org": {"v=DMARC1; rua=mailto:dmarc@example.org"},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil)
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil, 0)
 	if !containsDetail(result.Details, "DMARC warning: record has no p= policy") {
 		t.Fatalf("expected missing p= warning in %#v", result.Details)
 	}
@@ -110,7 +113,7 @@ func TestCheckMailAuthDNSReportsInvalidDMARCPolicy(t *testing.T) {
 		"_dmarc.example.org": {"v=DMARC1; p=monitor"},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil)
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil, 0)
 	if !containsDetail(result.Details, "DMARC warning: invalid p= policy monitor") {
 		t.Fatalf("expected invalid p= warning in %#v", result.Details)
 	}
@@ -125,7 +128,7 @@ func TestCheckMailAuthDNSReportsValidDKIMSelector(t *testing.T) {
 		"implicit-rsa._domainkey.example.org": {"v=DKIM1; p=QUJDREVGRw=="},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026", "ed25519", "implicit-rsa"})
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026", "ed25519", "implicit-rsa"}, 0)
 	for _, want := range []string{
 		"DKIM mail2026._domainkey.example.org: key type rsa",
 		"DKIM ed25519._domainkey.example.org: key type ed25519",
@@ -149,7 +152,7 @@ func TestCheckMailAuthDNSReportsMissingDKIMSelector(t *testing.T) {
 		"_dmarc.example.org": {"v=DMARC1; p=none"},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"})
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"}, 0)
 	if !containsDetail(result.Details, "DKIM mail2026._domainkey.example.org: missing") {
 		t.Fatalf("expected missing DKIM detail in %#v", result.Details)
 	}
@@ -165,7 +168,7 @@ func TestCheckMailAuthDNSReportsMultipleDKIMRecords(t *testing.T) {
 		"mail2026._domainkey.example.org": {"v=DKIM1; p=QUJDREVGRw==", "v=DKIM1; p=SElKS0w="},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"})
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"}, 0)
 	if !containsDetail(result.Details, "DKIM mail2026._domainkey.example.org: multiple DKIM records found") {
 		t.Fatalf("expected multiple DKIM detail in %#v", result.Details)
 	}
@@ -181,7 +184,7 @@ func TestCheckMailAuthDNSReportsDKIMMissingPublicKey(t *testing.T) {
 		"mail2026._domainkey.example.org": {"v=DKIM1; k=rsa"},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"})
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"}, 0)
 	if !containsDetail(result.Problems, "DKIM selector mail2026: record has no p= public key") {
 		t.Fatalf("expected missing p= warning in %#v", result.Problems)
 	}
@@ -194,7 +197,7 @@ func TestCheckMailAuthDNSReportsDKIMEmptyPublicKey(t *testing.T) {
 		"mail2026._domainkey.example.org": {"v=DKIM1; p="},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"})
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"}, 0)
 	if !containsDetail(result.Problems, "DKIM selector mail2026: record has an empty p= public key") {
 		t.Fatalf("expected empty p= warning in %#v", result.Problems)
 	}
@@ -207,7 +210,7 @@ func TestCheckMailAuthDNSReportsDKIMMalformedPublicKey(t *testing.T) {
 		"mail2026._domainkey.example.org": {"v=DKIM1; p=this is not base64!!!"},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"})
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"}, 0)
 	if !containsDetail(result.Problems, "DKIM selector mail2026: p= public key does not look like valid base64") {
 		t.Fatalf("expected malformed p= warning in %#v", result.Problems)
 	}
@@ -220,9 +223,64 @@ func TestCheckMailAuthDNSReportsDKIMMissingVersion(t *testing.T) {
 		"mail2026._domainkey.example.org": {"k=rsa; p=QUJDREVGRw=="},
 	})
 
-	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"})
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"}, 0)
 	if !containsDetail(result.Problems, "DKIM selector mail2026: record does not contain v=DKIM1") {
 		t.Fatalf("expected missing v= warning in %#v", result.Problems)
+	}
+}
+
+func TestCheckMailAuthDNSReportsLowSPFTTL(t *testing.T) {
+	checker := testMailAuthCheckerWithAuthoritativeTXT(map[string][]DNSRecord{
+		"example.org": {
+			{Value: "v=spf1 mx -all", TTL: 300},
+			{Value: "unrelated txt", TTL: 300},
+		},
+		"_dmarc.example.org": {
+			{Value: "v=DMARC1; p=none", TTL: 3600},
+		},
+	})
+
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil, 3600)
+	if !containsDetail(result.Problems, "SPF example.org @ns1.example.org. has low TTL 300") {
+		t.Fatalf("expected low SPF TTL warning in %#v", result.Problems)
+	}
+	if containsDetail(result.Problems, "unrelated txt") {
+		t.Fatalf("unrelated TXT records should not drive TTL warnings: %#v", result.Problems)
+	}
+}
+
+func TestCheckMailAuthDNSReportsLowDMARCTTL(t *testing.T) {
+	checker := testMailAuthCheckerWithAuthoritativeTXT(map[string][]DNSRecord{
+		"example.org": {
+			{Value: "v=spf1 mx -all", TTL: 3600},
+		},
+		"_dmarc.example.org": {
+			{Value: "v=DMARC1; p=none", TTL: 300},
+		},
+	})
+
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil, 3600)
+	if !containsDetail(result.Problems, "DMARC _dmarc.example.org @ns1.example.org. has low TTL 300") {
+		t.Fatalf("expected low DMARC TTL warning in %#v", result.Problems)
+	}
+}
+
+func TestCheckMailAuthDNSReportsLowDKIMTTL(t *testing.T) {
+	checker := testMailAuthCheckerWithAuthoritativeTXT(map[string][]DNSRecord{
+		"example.org": {
+			{Value: "v=spf1 mx -all", TTL: 3600},
+		},
+		"_dmarc.example.org": {
+			{Value: "v=DMARC1; p=none", TTL: 3600},
+		},
+		"mail2026._domainkey.example.org": {
+			{Value: "v=DKIM1; p=QUJDREVGRw==", TTL: 300},
+		},
+	})
+
+	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"}, 3600)
+	if !containsDetail(result.Problems, "DKIM mail2026._domainkey.example.org @ns1.example.org. has low TTL 300") {
+		t.Fatalf("expected low DKIM TTL warning in %#v", result.Problems)
 	}
 }
 
@@ -287,4 +345,31 @@ func testMailAuthChecker(records map[string][]string) Checker {
 			return nil, errors.New("no such host")
 		},
 	}
+}
+
+func testMailAuthCheckerWithAuthoritativeTXT(records map[string][]DNSRecord) Checker {
+	txtRecords := make(map[string][]string, len(records))
+	for name, dnsRecords := range records {
+		for _, record := range dnsRecords {
+			txtRecords[name] = append(txtRecords[name], record.Value)
+		}
+	}
+
+	checker := testMailAuthChecker(txtRecords)
+	checker.LookupNS = func(ctx context.Context, name string) ([]*net.NS, error) {
+		if name == "example.org" {
+			return []*net.NS{{Host: "ns1.example.org."}}, nil
+		}
+		return nil, errors.New("no such host")
+	}
+	checker.QueryDNSRecords = func(ctx context.Context, ns, name string, qtype uint16) ([]DNSRecord, error) {
+		if ns != "ns1.example.org." || qtype != dns.TypeTXT {
+			return nil, errors.New("no such host")
+		}
+		if found, ok := records[name]; ok {
+			return found, nil
+		}
+		return nil, errors.New("no such host")
+	}
+	return checker
 }

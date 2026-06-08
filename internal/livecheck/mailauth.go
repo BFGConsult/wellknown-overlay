@@ -7,15 +7,18 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/miekg/dns"
 )
 
-func (c Checker) CheckMailAuthDNS(ctx context.Context, domain string, dkimSelectors []string) Result {
+func (c Checker) CheckMailAuthDNS(ctx context.Context, domain string, dkimSelectors []string, minTTL uint32) Result {
 	result := Result{Name: "MAIL AUTH DNS", Passed: true}
 	result.Details = append(result.Details, c.checkSPF(ctx, domain)...)
 	result.Details = append(result.Details, c.checkDMARC(ctx, domain)...)
 	dkimDetails, dkimProblems := c.checkDKIM(ctx, domain, dkimSelectors)
 	result.Details = append(result.Details, dkimDetails...)
 	result.Problems = append(result.Problems, dkimProblems...)
+	c.warnMailAuthTXTLowTTL(ctx, &result, domain, dkimSelectors, minTTL)
 	result.Details = append(result.Details, "DKIM end-to-end message signing: not tested")
 	result.Problems = append(result.Problems, "DKIM end-to-end message signing is not tested by this livecheck. Selector DNS records can be correct while outbound messages are still unsigned or signed incorrectly.")
 	return result
@@ -133,6 +136,55 @@ func (c Checker) checkDKIM(ctx context.Context, domain string, selectors []strin
 		}
 	}
 	return details, problems
+}
+
+func (c Checker) warnMailAuthTXTLowTTL(ctx context.Context, result *Result, domain string, selectors []string, minTTL uint32) {
+	if minTTL == 0 {
+		return
+	}
+
+	nsRecords, err := c.lookupNS(ctx, domain)
+	if err != nil || len(nsRecords) == 0 {
+		return
+	}
+
+	nameservers := normalizeNSRecords(nsRecords)
+	for _, ns := range nameservers {
+		c.warnMailAuthTXTRecordLowTTL(ctx, result, ns, domain, "SPF "+domain, minTTL, func(value string) bool {
+			return len(findPrefixedTXT([]string{value}, "v=spf1")) > 0
+		})
+
+		dmarcName := "_dmarc." + domain
+		c.warnMailAuthTXTRecordLowTTL(ctx, result, ns, dmarcName, "DMARC "+dmarcName, minTTL, func(value string) bool {
+			return len(findPrefixedTXT([]string{value}, "v=dmarc1")) > 0
+		})
+
+		for _, selector := range selectors {
+			name := selector + "._domainkey." + domain
+			c.warnMailAuthTXTRecordLowTTL(ctx, result, ns, name, "DKIM "+name, minTTL, func(value string) bool {
+				return len(findDKIMTXT([]string{value})) > 0
+			})
+		}
+	}
+}
+
+func (c Checker) warnMailAuthTXTRecordLowTTL(ctx context.Context, result *Result, ns, name, label string, minTTL uint32, matches func(string) bool) {
+	records, err := c.queryDNSRecords(ctx, ns, name, dns.TypeTXT)
+	if err != nil || len(records) == 0 {
+		return
+	}
+
+	var matched []DNSRecord
+	for _, record := range records {
+		if matches(record.Value) {
+			matched = append(matched, record)
+		}
+	}
+	if len(matched) == 0 {
+		return
+	}
+
+	warnLowTTL(result, label+" @"+ns, matched, minTTL)
 }
 
 func findPrefixedTXT(records []string, prefix string) []string {
