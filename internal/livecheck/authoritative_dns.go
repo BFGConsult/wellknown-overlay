@@ -234,7 +234,7 @@ func warnLowTTL(result *Result, label string, records []DNSRecord, minTTL uint32
 		if record.TTL == 0 || record.TTL >= minTTL {
 			continue
 		}
-		result.Problems = append(result.Problems, fmt.Sprintf("%s has low TTL %d; recommended minimum is %d once deployment is stable.", label, record.TTL, minTTL))
+		result.Problems = append(result.Problems, fmt.Sprintf("%s record %q has low TTL %d; recommended minimum is %d once deployment is stable.", label, record.Value, record.TTL, minTTL))
 	}
 }
 

@@ -132,7 +132,7 @@ func TestCheckAuthoritativeDNSReportsLowTTL(t *testing.T) {
 	if !containsDetail(result.Details, "overlay.example.net. (TTL 300)") {
 		t.Fatalf("expected TTL detail in %#v", result.Details)
 	}
-	if !containsDetail(result.Problems, "autoconfig.example.org @ns1.example.net. has low TTL 300; recommended minimum is 3600") {
+	if !containsDetail(result.Problems, `autoconfig.example.org @ns1.example.net. record "overlay.example.net." has low TTL 300; recommended minimum is 3600`) {
 		t.Fatalf("expected low TTL warning in %#v", result.Problems)
 	}
 }

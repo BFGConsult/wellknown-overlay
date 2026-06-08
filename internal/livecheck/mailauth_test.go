@@ -241,7 +241,7 @@ func TestCheckMailAuthDNSReportsLowSPFTTL(t *testing.T) {
 	})
 
 	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil, 3600)
-	if !containsDetail(result.Problems, "SPF example.org @ns1.example.org. has low TTL 300") {
+	if !containsDetail(result.Problems, `SPF example.org @ns1.example.org. record "v=spf1 mx -all" has low TTL 300`) {
 		t.Fatalf("expected low SPF TTL warning in %#v", result.Problems)
 	}
 	if containsDetail(result.Problems, "unrelated txt") {
@@ -260,7 +260,7 @@ func TestCheckMailAuthDNSReportsLowDMARCTTL(t *testing.T) {
 	})
 
 	result := checker.CheckMailAuthDNS(context.Background(), "example.org", nil, 3600)
-	if !containsDetail(result.Problems, "DMARC _dmarc.example.org @ns1.example.org. has low TTL 300") {
+	if !containsDetail(result.Problems, `DMARC _dmarc.example.org @ns1.example.org. record "v=DMARC1; p=none" has low TTL 300`) {
 		t.Fatalf("expected low DMARC TTL warning in %#v", result.Problems)
 	}
 }
@@ -279,7 +279,7 @@ func TestCheckMailAuthDNSReportsLowDKIMTTL(t *testing.T) {
 	})
 
 	result := checker.CheckMailAuthDNS(context.Background(), "example.org", []string{"mail2026"}, 3600)
-	if !containsDetail(result.Problems, "DKIM mail2026._domainkey.example.org @ns1.example.org. has low TTL 300") {
+	if !containsDetail(result.Problems, `DKIM mail2026._domainkey.example.org @ns1.example.org. record "v=DKIM1; p=QUJDREVGRw==" has low TTL 300`) {
 		t.Fatalf("expected low DKIM TTL warning in %#v", result.Problems)
 	}
 }
