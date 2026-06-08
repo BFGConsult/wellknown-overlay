@@ -272,12 +272,15 @@ func TestRoundTripFailureFailsRun(t *testing.T) {
 }
 
 func TestVerifyRoundTripDKIMUnsignedMessageWarns(t *testing.T) {
-	details, problems := Checker{}.verifyRoundTripDKIM([]byte("From: alice@example.org\r\n\r\nbody"), "example.org")
+	details, problems, fatal := Checker{}.verifyRoundTripDKIM([]byte("From: alice@example.org\r\n\r\nbody"), "example.org", nil)
 	if !containsDetail(details, "DKIM end-to-end verification: unsigned message; no DKIM selector found") {
 		t.Fatalf("expected unsigned detail in %#v", details)
 	}
 	if !containsDetail(problems, "no DKIM selector can be inferred") {
 		t.Fatalf("expected unsigned problem in %#v", problems)
+	}
+	if fatal {
+		t.Fatalf("unsigned DKIM should not be fatal when no selectors are configured")
 	}
 }
 
@@ -290,12 +293,54 @@ func TestVerifyRoundTripDKIMValidSignaturePasses(t *testing.T) {
 			return nil, errors.New("unexpected lookup " + name)
 		},
 	}
-	details, problems := checker.verifyRoundTripDKIM([]byte(crlf(dkimFixtureSignedMessage)), "example.com")
+	details, problems, fatal := checker.verifyRoundTripDKIM([]byte(crlf(dkimFixtureSignedMessage)), "example.com", nil)
 	if !containsDetail(details, "DKIM signature d=example.com s=brisbane: pass") {
 		t.Fatalf("expected DKIM pass detail in %#v", details)
 	}
 	if containsDetail(problems, "No passing DKIM signature") {
 		t.Fatalf("did not expect missing pass problem in %#v", problems)
+	}
+	if fatal {
+		t.Fatalf("valid DKIM should not be fatal")
+	}
+}
+
+func TestVerifyRoundTripDKIMValidSignatureMatchesConfiguredSelector(t *testing.T) {
+	checker := Checker{
+		LookupTXT: func(ctx context.Context, name string) ([]string, error) {
+			if name == "brisbane._domainkey.example.com" {
+				return []string{dkimFixturePublicKey}, nil
+			}
+			return nil, errors.New("unexpected lookup " + name)
+		},
+	}
+	_, problems, fatal := checker.verifyRoundTripDKIM([]byte(crlf(dkimFixtureSignedMessage)), "example.com", []string{"brisbane"})
+	if containsDetail(problems, "configured selector") {
+		t.Fatalf("did not expect configured selector problem in %#v", problems)
+	}
+	if fatal {
+		t.Fatalf("matching configured selector should not be fatal")
+	}
+}
+
+func TestVerifyRoundTripDKIMValidSignatureFailsWhenConfiguredSelectorDoesNotMatch(t *testing.T) {
+	checker := Checker{
+		LookupTXT: func(ctx context.Context, name string) ([]string, error) {
+			if name == "brisbane._domainkey.example.com" {
+				return []string{dkimFixturePublicKey}, nil
+			}
+			return nil, errors.New("unexpected lookup " + name)
+		},
+	}
+	details, problems, fatal := checker.verifyRoundTripDKIM([]byte(crlf(dkimFixtureSignedMessage)), "example.com", []string{"wrong-selector"})
+	if !containsDetail(details, "DKIM signature d=example.com s=brisbane: pass") {
+		t.Fatalf("expected DKIM pass detail in %#v", details)
+	}
+	if !containsDetail(problems, "Expected one of: wrong-selector") {
+		t.Fatalf("expected configured selector problem in %#v", problems)
+	}
+	if !fatal {
+		t.Fatalf("mismatched configured selector should be fatal")
 	}
 }
 
@@ -309,12 +354,15 @@ func TestVerifyRoundTripDKIMInvalidSignatureWarns(t *testing.T) {
 		},
 	}
 	broken := strings.Replace(dkimFixtureSignedMessage, "Are you hungry yet?", "Are you hungry now?", 1)
-	details, problems := checker.verifyRoundTripDKIM([]byte(crlf(broken)), "example.com")
+	details, problems, fatal := checker.verifyRoundTripDKIM([]byte(crlf(broken)), "example.com", nil)
 	if !containsDetail(details, "DKIM signature d=example.com s=brisbane: fail") {
 		t.Fatalf("expected DKIM fail detail in %#v", details)
 	}
 	if !containsDetail(problems, "No passing DKIM signature for example.com") {
 		t.Fatalf("expected DKIM failure problem in %#v", problems)
+	}
+	if fatal {
+		t.Fatalf("invalid DKIM should remain advisory when no selectors are configured")
 	}
 }
 

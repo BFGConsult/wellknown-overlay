@@ -272,8 +272,12 @@ instead; this is useful for checking externally delivered DKIM signatures. If no
 receiver is configured, the tested address is used for both sending and
 receiving. The sender password is read from `LIVECHECK_PASSWORD`,
 `-livecheck-config`, or prompted interactively with hidden input. A separate
-receiver mailbox requires `LIVECHECK_RECEIVER_PASSWORD`. Unlike the advisory DNS
-checks, a requested round-trip failure exits non-zero.
+receiver mailbox requires `LIVECHECK_RECEIVER_PASSWORD`. If DKIM selectors are
+configured with `-dkim-selectors` or `DKIM_SELECTORS`, the received message must
+have a passing DKIM signature for the tested domain using one of those selectors.
+When no DKIM selectors are configured, round-trip DKIM still reports what it
+finds but does not require a specific selector. Unlike the advisory DNS checks,
+a requested round-trip failure exits non-zero.
 
 `-livecheck-config` reads a local `KEY=value` file. It supports
 `LIVECHECK_EMAIL`, `LIVECHECK_PASSWORD`, `LIVECHECK_RECEIVER_EMAIL`,

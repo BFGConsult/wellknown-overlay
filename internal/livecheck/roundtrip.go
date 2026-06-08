@@ -24,6 +24,7 @@ type RoundTripOptions struct {
 	Password         string
 	ReceiverEmail    string
 	ReceiverPassword string
+	DKIMSelectors    []string
 	Timeout          time.Duration
 	KeepMessage      bool
 	InsecureTLS      bool
@@ -136,9 +137,12 @@ func (c Checker) CheckRoundTrip(ctx context.Context, email, domain string, opts 
 		result.Details = append(result.Details, "test message kept")
 	}
 
-	dkimDetails, dkimProblems := c.verifyRoundTripDKIM(receipt.RawMessage, domain)
+	dkimDetails, dkimProblems, dkimFatal := c.verifyRoundTripDKIM(receipt.RawMessage, domain, opts.DKIMSelectors)
 	result.Details = append(result.Details, dkimDetails...)
 	result.Problems = append(result.Problems, dkimProblems...)
+	if dkimFatal {
+		result.Passed = false
+	}
 	return result
 }
 
@@ -354,9 +358,9 @@ func deleteIMAPMessage(imapClient *client.Client, seqNum uint32) error {
 	return imapClient.Expunge(nil)
 }
 
-func (c Checker) verifyRoundTripDKIM(raw []byte, domain string) ([]string, []string) {
+func (c Checker) verifyRoundTripDKIM(raw []byte, domain string, requiredSelectors []string) ([]string, []string, bool) {
 	if len(raw) == 0 {
-		return []string{"DKIM end-to-end verification: not checked; raw received message unavailable"}, nil
+		return []string{"DKIM end-to-end verification: not checked; raw received message unavailable"}, nil, false
 	}
 	signatures := extractDKIMSignatureIdentities(raw)
 	verifications, err := dkim.VerifyWithOptions(bytes.NewReader(raw), &dkim.VerifyOptions{
@@ -365,13 +369,14 @@ func (c Checker) verifyRoundTripDKIM(raw []byte, domain string) ([]string, []str
 		},
 	})
 	if err != nil {
-		return []string{"DKIM end-to-end verification: failed"}, []string{"DKIM verification failed: " + err.Error()}
+		return []string{"DKIM end-to-end verification: failed"}, []string{"DKIM verification failed: " + err.Error()}, len(requiredSelectors) > 0
 	}
 	if len(verifications) == 0 {
-		return []string{"DKIM end-to-end verification: unsigned message; no DKIM selector found"}, []string{"Received round-trip message has no DKIM signature, so no DKIM selector can be inferred from the round-trip."}
+		return []string{"DKIM end-to-end verification: unsigned message; no DKIM selector found"}, []string{"Received round-trip message has no DKIM signature, so no DKIM selector can be inferred from the round-trip."}, len(requiredSelectors) > 0
 	}
 	var details []string
 	var problems []string
+	var passingRequiredSelector bool
 	for i, verification := range verifications {
 		status := "pass"
 		if verification.Err != nil {
@@ -389,11 +394,18 @@ func (c Checker) verifyRoundTripDKIM(raw []byte, domain string) ([]string, []str
 		if strings.EqualFold(verification.Domain, domain) && verification.Err != nil {
 			problems = append(problems, "DKIM signature for "+domain+" failed: "+verification.Err.Error())
 		}
+		if strings.EqualFold(verification.Domain, domain) && verification.Err == nil && selectorInList(selector, requiredSelectors) {
+			passingRequiredSelector = true
+		}
 	}
 	if !hasPassingDKIMForDomain(verifications, domain) {
 		problems = append(problems, "No passing DKIM signature for "+domain+" was found on the received message.")
 	}
-	return details, problems
+	if len(requiredSelectors) > 0 && !passingRequiredSelector {
+		problems = append(problems, "No passing DKIM signature for "+domain+" used a configured selector. Expected one of: "+strings.Join(requiredSelectors, ", ")+".")
+		return details, problems, true
+	}
+	return details, problems, false
 }
 
 type dkimSignatureIdentity struct {
@@ -448,6 +460,18 @@ func extractDKIMSignatureIdentities(raw []byte) []dkimSignatureIdentity {
 func hasPassingDKIMForDomain(verifications []*dkim.Verification, domain string) bool {
 	for _, verification := range verifications {
 		if strings.EqualFold(verification.Domain, domain) && verification.Err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func selectorInList(selector string, selectors []string) bool {
+	if selector == "" {
+		return false
+	}
+	for _, candidate := range selectors {
+		if strings.EqualFold(selector, candidate) {
 			return true
 		}
 	}

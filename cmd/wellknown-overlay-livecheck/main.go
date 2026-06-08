@@ -68,6 +68,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	parsedDKIMSelectors := parseDKIMSelectors(*dkimSelectors, configValue("DKIM_SELECTORS", fileConfig))
 
 	ok, err := livecheck.Run(context.Background(), livecheck.Options{
 		EmailAddress:    emailAddress,
@@ -75,13 +76,14 @@ func run(args []string) error {
 		InsecureTLS:     *insecure || *insecureShort,
 		Verbose:         *verbose,
 		SkipMailAuthDNS: *skipMailAuthDNS,
-		DKIMSelectors:   parseDKIMSelectors(*dkimSelectors, configValue("DKIM_SELECTORS", fileConfig)),
+		DKIMSelectors:   parsedDKIMSelectors,
 		MinDNSTTL:       minDNSTTL,
 		RoundTrip: livecheck.RoundTripOptions{
 			Enabled:          *roundTrip,
 			Password:         password,
 			ReceiverEmail:    configValue("LIVECHECK_RECEIVER_EMAIL", fileConfig),
 			ReceiverPassword: configValue("LIVECHECK_RECEIVER_PASSWORD", fileConfig),
+			DKIMSelectors:    parsedDKIMSelectors,
 			Timeout:          *roundTripTimeout,
 			KeepMessage:      *roundTripKeepMessage,
 			InsecureTLS:      *insecure || *insecureShort,
