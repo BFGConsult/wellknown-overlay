@@ -47,6 +47,52 @@ func TestRenderMailSetupUsesHumanPlaceholdersWithoutEmailAddress(t *testing.T) {
 	}
 }
 
+func TestRenderMailSetupMarkdownUsesLiteralPlaceholders(t *testing.T) {
+	got, lang, err := RenderMailSetupMarkdown(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, MailSetupRenderOptions{
+		Lang:            "en",
+		PlaceholderMode: MailSetupLiteralPlaceholders,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if lang != "en" {
+		t.Fatalf("lang = %q, want en", lang)
+	}
+	for _, want := range []string{
+		"Your email address: %EMAILADDRESS%",
+		"| Username | %USERNAME% |",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("markdown does not contain %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderMailSetupMarkdownUsesSuppliedUsername(t *testing.T) {
+	got, _, err := RenderMailSetupMarkdown(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, MailSetupRenderOptions{
+		EmailAddress:    "bfg@example.org",
+		Username:        "login@example.org",
+		Lang:            "en",
+		PlaceholderMode: MailSetupLiteralPlaceholders,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{
+		"Your email address: bfg@example.org",
+		"| Username | login@example.org |",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("markdown does not contain %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "%USERNAME%") {
+		t.Fatalf("markdown still contains username placeholder:\n%s", got)
+	}
+}
+
 func TestRenderMailSetupUsesNorwegianPOTranslation(t *testing.T) {
 	body, lang, err := RenderMailSetup(fstest.MapFS{}, testMailAccountProfile("default", "EFN"), nil, "", "nb-NO", "")
 	if err != nil {

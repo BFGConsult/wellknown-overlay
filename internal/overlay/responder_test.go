@@ -119,6 +119,30 @@ func TestResponderRendersMailSetupRoute(t *testing.T) {
 	}
 }
 
+func TestResponderMailSetupIgnoresUsernameAndPasswordQueryParameters(t *testing.T) {
+	responder := NewResponder(Config{
+		MailAccount: testMailAccount(),
+	}, fstest.MapFS{})
+
+	response, err := responder.RenderRequest(MailSetupPath, "emailaddress=user@example.org&username=bad-user-should-not-render&password=UNIQUE-DO-NOT-RENDER-9d8f7c6b5a4e")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := string(response.Body)
+	for _, forbidden := range []string{
+		"bad-user-should-not-render",
+		"UNIQUE-DO-NOT-RENDER-9d8f7c6b5a4e",
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("public setup response contains forbidden query value %q:\n%s", forbidden, body)
+		}
+	}
+	if !strings.Contains(body, "user@example.org") {
+		t.Fatalf("public setup response should still use emailaddress:\n%s", body)
+	}
+}
+
 func TestResponderRendersAppleMobileconfigRoute(t *testing.T) {
 	responder := NewResponder(Config{
 		MailAccount: testMailAccount(),

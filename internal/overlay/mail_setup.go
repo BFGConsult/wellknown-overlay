@@ -21,26 +21,52 @@ const mailSetupTemplatePath = "templates/mail-setup.md"
 //go:embed templates/mail-setup.md translations/*.po
 var embeddedMailSetupFS embed.FS
 
+type MailSetupPlaceholderMode int
+
+const (
+	MailSetupHumanPlaceholders MailSetupPlaceholderMode = iota
+	MailSetupLiteralPlaceholders
+)
+
+type MailSetupRenderOptions struct {
+	EmailAddress    string
+	Username        string
+	Lang            string
+	PlaceholderMode MailSetupPlaceholderMode
+}
+
 func RenderMailSetup(files fs.FS, cfg MailAccountProfile, manualSetup *MailManualSetupConfig, emailAddress, lang, sharePreviewImageURL string) ([]byte, string, error) {
-	lang = normalizeLanguage(lang)
-	template, err := mailSetupTemplate(files)
+	markdown, lang, err := RenderMailSetupMarkdown(files, cfg, manualSetup, MailSetupRenderOptions{
+		EmailAddress:    emailAddress,
+		Lang:            lang,
+		PlaceholderMode: MailSetupHumanPlaceholders,
+	})
 	if err != nil {
 		return nil, "", err
+	}
+	body := markdownDocumentToHTML(markdown, lang, sharePreviewImageURL)
+	return []byte(body), lang, nil
+}
+
+func RenderMailSetupMarkdown(files fs.FS, cfg MailAccountProfile, manualSetup *MailManualSetupConfig, opts MailSetupRenderOptions) (string, string, error) {
+	lang := normalizeLanguage(opts.Lang)
+	template, err := mailSetupTemplate(files)
+	if err != nil {
+		return "", "", err
 	}
 	if lang != "" && lang != "en" {
 		translated, err := translatedMailSetupTemplate(files, lang, template)
 		if err != nil {
-			return nil, "", err
+			return "", "", err
 		}
 		if translated != "" {
 			template = translated
 		}
 	}
 
-	rendered := renderMailSetupTemplate(template, cfg, emailAddress, lang)
+	rendered := renderMailSetupTemplate(template, cfg, opts, lang)
 	rendered = appendManualSetupSections(rendered, manualSetup, lang)
-	body := markdownDocumentToHTML(rendered, lang, sharePreviewImageURL)
-	return []byte(body), lang, nil
+	return rendered, lang, nil
 }
 
 func mailSetupTemplate(files fs.FS) (string, error) {
@@ -80,17 +106,17 @@ func translatedMailSetupTemplate(files fs.FS, lang, source string) (string, erro
 	return translations[source], nil
 }
 
-func renderMailSetupTemplate(template string, cfg MailAccountProfile, emailAddress, lang string) string {
+func renderMailSetupTemplate(template string, cfg MailAccountProfile, opts MailSetupRenderOptions, lang string) string {
 	incoming := cfg.Incoming
 	outgoing := cfg.Outgoing
-	incoming.Username = substituteManualMailVariables(incoming.Username, emailAddress, lang)
-	outgoing.Username = substituteManualMailVariables(outgoing.Username, emailAddress, lang)
+	incoming.Username = renderManualUsername(incoming.Username, opts, lang)
+	outgoing.Username = renderManualUsername(outgoing.Username, opts, lang)
 
 	values := map[string]string{
 		"display_name":            cfg.DisplayName,
 		"display_short_name":      cfg.DisplayShortName,
 		"domain":                  cfg.Domain,
-		"email_address":           manualEmailAddress(emailAddress, lang),
+		"email_address":           manualEmailAddress(opts.EmailAddress, lang, opts.PlaceholderMode),
 		"incoming.type":           incoming.Type,
 		"incoming.hostname":       incoming.Hostname,
 		"incoming.port":           fmt.Sprintf("%d", incoming.Port),
@@ -113,6 +139,16 @@ func renderMailSetupTemplate(template string, cfg MailAccountProfile, emailAddre
 		rendered = strings.ReplaceAll(rendered, "{{"+key+"}}", value)
 	}
 	return rendered
+}
+
+func renderManualUsername(value string, opts MailSetupRenderOptions, lang string) string {
+	if opts.Username != "" {
+		return opts.Username
+	}
+	if opts.PlaceholderMode == MailSetupLiteralPlaceholders {
+		return "%USERNAME%"
+	}
+	return substituteManualMailVariables(value, opts.EmailAddress, lang)
 }
 
 func appendManualSetupSections(markdown string, manualSetup *MailManualSetupConfig, lang string) string {
@@ -148,14 +184,17 @@ func substituteManualMailVariables(value, emailAddress, lang string) string {
 	if emailAddress != "" {
 		return substituteMailVariables(value, emailAddress)
 	}
-	value = strings.ReplaceAll(value, "%EMAILADDRESS%", manualEmailAddress("", lang))
+	value = strings.ReplaceAll(value, "%EMAILADDRESS%", manualEmailAddress("", lang, MailSetupHumanPlaceholders))
 	value = strings.ReplaceAll(value, "%EMAILLOCALPART%", manualEmailLocalPart(lang))
 	return value
 }
 
-func manualEmailAddress(emailAddress, lang string) string {
+func manualEmailAddress(emailAddress, lang string, mode MailSetupPlaceholderMode) string {
 	if emailAddress != "" {
 		return emailAddress
+	}
+	if mode == MailSetupLiteralPlaceholders {
+		return "%EMAILADDRESS%"
 	}
 	switch normalizeLanguage(lang) {
 	case "nb", "nn", "no":

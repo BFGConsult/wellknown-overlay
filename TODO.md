@@ -22,3 +22,7 @@ Current backlog from the deployment/autoconfig work:
   testing, but publication still needs an explicit security model: avoid storing
   credentials, keep logs scrubbed, rate-limit attempts, require HTTPS, and make
   the test boundaries clear to users.
+- Revisit production binary size once debugging needs are clearer. The core Go
+  binary is larger than the visible feature set suggests because it is a static
+  Go binary with runtime/debug info included. Consider stripped release builds
+  with `-ldflags="-s -w"` later, but keep debug info for now.
