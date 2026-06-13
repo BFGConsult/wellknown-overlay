@@ -32,6 +32,7 @@ type Options struct {
 	InsecureTLS     bool
 	Verbose         bool
 	SkipMailAuthDNS bool
+	MailSetupOnly   bool
 	DKIMSelectors   []string
 	MinDNSTTL       uint32
 	RoundTrip       RoundTripOptions
@@ -134,6 +135,24 @@ func runWithChecker(ctx context.Context, opts Options, stdout io.Writer, checker
 		fmt.Fprintln(stdout, "TLS certificate verification: disabled for diagnosis")
 	} else {
 		fmt.Fprintln(stdout, "TLS certificate verification: enabled")
+	}
+
+	if opts.MailSetupOnly {
+		if !opts.RoundTrip.Enabled {
+			return false, errors.New("mail setup only mode requires round-trip testing")
+		}
+		roundTripResult := checker.CheckRoundTrip(ctx, email, domain, opts.RoundTrip)
+		writeResult(stdout, roundTripResult, true)
+		if roundTripResult.Passed {
+			if len(roundTripResult.Problems) > 0 {
+				fmt.Fprintln(stdout, "\nSummary: PASS (with warnings)")
+			} else {
+				fmt.Fprintln(stdout, "\nSummary: PASS")
+			}
+			return true, nil
+		}
+		fmt.Fprintln(stdout, "\nSummary: FAIL")
+		return false, nil
 	}
 
 	allPassed := true

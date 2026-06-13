@@ -3,6 +3,8 @@ package livecheck
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -156,6 +158,113 @@ func TestCheckRoundTripSupportsSeparateReceiver(t *testing.T) {
 	}
 	if !containsDetail(result.Details, "round-trip receiver: bob@receiver.example") {
 		t.Fatalf("expected receiver detail in %#v", result.Details)
+	}
+}
+
+func TestCheckRoundTripSupportsLocalSenderAutoconfig(t *testing.T) {
+	dir := t.TempDir()
+	senderAutoconfig := filepath.Join(dir, "sender.xml")
+	if err := os.WriteFile(senderAutoconfig, []byte(roundTripThunderbirdXML("example.org")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	checker := testChecker(map[string]testResponse{
+		"https://receiver.example/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress=bob%40receiver.example": {
+			status: 200,
+			body:   roundTripThunderbirdXML("receiver.example"),
+		},
+	})
+	checker.Now = func() time.Time { return time.Unix(1700000000, 123).UTC() }
+	checker.SendMail = func(ctx context.Context, message roundTripMessage, server mailServerSettings, password, domain string, insecureTLS bool) error {
+		if server.Username != "alice@example.org" {
+			t.Fatalf("SMTP username = %q", server.Username)
+		}
+		return nil
+	}
+	checker.PollIMAP = func(ctx context.Context, message roundTripMessage, server mailServerSettings, password, domain string, insecureTLS bool, timeout time.Duration, keepMessage bool) (roundTripReceipt, error) {
+		return roundTripReceipt{
+			FoundAfter: time.Second,
+			RawMessage: []byte("From: alice@example.org\r\n" +
+				"To: bob@receiver.example\r\n" +
+				"X-Wellknown-Overlay-Livecheck-ID: " + message.ID + "\r\n\r\nbody"),
+			Deleted: true,
+		}, nil
+	}
+
+	result := checker.CheckRoundTrip(context.Background(), "alice@example.org", "example.org", RoundTripOptions{
+		Enabled:          true,
+		Password:         "sender-secret",
+		ReceiverEmail:    "bob@receiver.example",
+		ReceiverPassword: "receiver-secret",
+		SenderAutoconfig: senderAutoconfig,
+	})
+	if !result.Passed {
+		t.Fatalf("expected pass: %#v", result)
+	}
+}
+
+func TestMailSetupOnlyRunsRoundTripWithoutDiscovery(t *testing.T) {
+	dir := t.TempDir()
+	senderAutoconfig := filepath.Join(dir, "sender.xml")
+	if err := os.WriteFile(senderAutoconfig, []byte(roundTripThunderbirdXML("example.org")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	checker := testChecker(map[string]testResponse{
+		"https://receiver.example/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress=bob%40receiver.example": {
+			status: 200,
+			body:   roundTripThunderbirdXML("receiver.example"),
+		},
+	})
+	checker.Now = func() time.Time { return time.Unix(1700000000, 123).UTC() }
+	checker.SendMail = func(ctx context.Context, message roundTripMessage, server mailServerSettings, password, domain string, insecureTLS bool) error {
+		return nil
+	}
+	checker.PollIMAP = func(ctx context.Context, message roundTripMessage, server mailServerSettings, password, domain string, insecureTLS bool, timeout time.Duration, keepMessage bool) (roundTripReceipt, error) {
+		return roundTripReceipt{
+			FoundAfter: time.Second,
+			RawMessage: []byte("From: alice@example.org\r\n" +
+				"To: bob@receiver.example\r\n" +
+				"X-Wellknown-Overlay-Livecheck-ID: " + message.ID + "\r\n\r\nbody"),
+			Deleted: true,
+		}, nil
+	}
+
+	var stdout strings.Builder
+	ok, err := runWithChecker(context.Background(), Options{
+		EmailAddress:  "alice@example.org",
+		MailSetupOnly: true,
+		RoundTrip: RoundTripOptions{
+			Enabled:          true,
+			Password:         "sender-secret",
+			ReceiverEmail:    "bob@receiver.example",
+			ReceiverPassword: "receiver-secret",
+			SenderAutoconfig: senderAutoconfig,
+		},
+	}, &stdout, checker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatalf("expected mail setup only run to pass:\n%s", stdout.String())
+	}
+	got := stdout.String()
+	if strings.Contains(got, "[THUNDERBIRD]") || strings.Contains(got, "[OUTLOOK]") || strings.Contains(got, "[APPLE]") || strings.Contains(got, "[DNS SRV]") {
+		t.Fatalf("mail setup only should not run discovery checks:\n%s", got)
+	}
+	if !strings.Contains(got, "[ROUND TRIP] PASS") {
+		t.Fatalf("mail setup only should run round trip:\n%s", got)
+	}
+}
+
+func TestMailSetupOnlyRequiresRoundTrip(t *testing.T) {
+	var stdout strings.Builder
+	_, err := runWithChecker(context.Background(), Options{
+		EmailAddress:  "alice@example.org",
+		MailSetupOnly: true,
+	}, &stdout, roundTripChecker(t))
+	if err == nil {
+		t.Fatal("expected mail setup only without round trip to fail")
 	}
 }
 

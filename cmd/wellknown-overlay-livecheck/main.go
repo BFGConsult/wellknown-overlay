@@ -36,6 +36,7 @@ func run(args []string) error {
 	skipMailAuthDNS := fs.Bool("skip-mail-auth-dns", false, "skip advisory SPF, DMARC, and DKIM DNS checks")
 	minDNSTTLFlag := fs.Int("min-dns-ttl", -1, "minimum recommended authoritative DNS TTL in seconds")
 	dkimSelectors := fs.String("dkim-selectors", "", "comma-separated DKIM selectors to check, overrides DKIM_SELECTORS")
+	mailSetupOnly := fs.Bool("mail-setup-only", false, "only run credentialed IMAP/SMTP round-trip setup testing")
 	roundTrip := fs.Bool("round-trip", false, "send a test message over SMTP and verify receipt over IMAP")
 	roundTripTimeout := fs.Duration("round-trip-timeout", 60*time.Second, "total timeout for the round-trip test")
 	roundTripKeepMessage := fs.Bool("round-trip-keep-message", false, "keep the round-trip test message instead of deleting it")
@@ -76,6 +77,7 @@ func run(args []string) error {
 		InsecureTLS:     *insecure || *insecureShort,
 		Verbose:         *verbose,
 		SkipMailAuthDNS: *skipMailAuthDNS,
+		MailSetupOnly:   *mailSetupOnly,
 		DKIMSelectors:   parsedDKIMSelectors,
 		MinDNSTTL:       minDNSTTL,
 		RoundTrip: livecheck.RoundTripOptions{
@@ -83,6 +85,7 @@ func run(args []string) error {
 			Password:         password,
 			ReceiverEmail:    configValue("LIVECHECK_RECEIVER_EMAIL", fileConfig),
 			ReceiverPassword: configValue("LIVECHECK_RECEIVER_PASSWORD", fileConfig),
+			SenderAutoconfig: configValue("LIVECHECK_SENDER_AUTOCONFIG", fileConfig),
 			DKIMSelectors:    parsedDKIMSelectors,
 			Timeout:          *roundTripTimeout,
 			KeepMessage:      *roundTripKeepMessage,
@@ -109,13 +112,15 @@ options:
   -livecheck-config
              local KEY=value config file; supports LIVECHECK_EMAIL, LIVECHECK_PASSWORD,
              LIVECHECK_RECEIVER_EMAIL, LIVECHECK_RECEIVER_PASSWORD,
-             LIVECHECK_MIN_DNS_TTL, and DKIM_SELECTORS
+             LIVECHECK_SENDER_AUTOCONFIG, LIVECHECK_MIN_DNS_TTL, and DKIM_SELECTORS
   -skip-mail-auth-dns
              skip advisory SPF, DMARC, and DKIM DNS checks
   -min-dns-ttl
              warn when authoritative DNS TTL is below this value, default 3600
   -dkim-selectors
              comma-separated DKIM selectors to check, overrides DKIM_SELECTORS
+  -mail-setup-only
+             only run credentialed IMAP/SMTP setup testing; requires -round-trip
   -round-trip
              send a test message over SMTP and verify receipt over IMAP
   -round-trip-timeout

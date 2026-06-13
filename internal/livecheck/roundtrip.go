@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/smtp"
 	"net/textproto"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ type RoundTripOptions struct {
 	Password         string
 	ReceiverEmail    string
 	ReceiverPassword string
+	SenderAutoconfig string
 	DKIMSelectors    []string
 	Timeout          time.Duration
 	KeepMessage      bool
@@ -73,7 +75,7 @@ func (c Checker) CheckRoundTrip(ctx context.Context, email, domain string, opts 
 		timeout = 60 * time.Second
 	}
 
-	senderSettings, err := c.discoverMailSettings(ctx, email, domain)
+	senderSettings, err := c.discoverRoundTripSenderSettings(ctx, email, domain, opts.SenderAutoconfig)
 	if err != nil {
 		result.Problems = append(result.Problems, "could not derive sender IMAP/SMTP settings from Thunderbird Autoconfig: "+err.Error())
 		return result
@@ -146,6 +148,17 @@ func (c Checker) CheckRoundTrip(ctx context.Context, email, domain string, opts 
 	return result
 }
 
+func (c Checker) discoverRoundTripSenderSettings(ctx context.Context, email, domain, autoconfigPath string) (mailSettings, error) {
+	if strings.TrimSpace(autoconfigPath) == "" {
+		return c.discoverMailSettings(ctx, email, domain)
+	}
+	body, err := os.ReadFile(autoconfigPath)
+	if err != nil {
+		return mailSettings{}, err
+	}
+	return parseThunderbirdSettings(body, domain)
+}
+
 func (c Checker) newRoundTripMessage(from, to string) roundTripMessage {
 	now := c.now()
 	id := fmt.Sprintf("%d.%s", now.UnixNano(), sanitizeMessageIDLocal(from))
@@ -213,7 +226,7 @@ func sendRoundTripSMTP(ctx context.Context, message roundTripMessage, server mai
 	}
 	defer smtpClient.Close()
 
-	if err := smtpClient.Hello("wellknown-overlay-livecheck"); err != nil {
+	if err := smtpClient.Hello("wellknown-overlay-livecheck.localhost"); err != nil {
 		return err
 	}
 	if isStartTLS(server.SocketType) {
