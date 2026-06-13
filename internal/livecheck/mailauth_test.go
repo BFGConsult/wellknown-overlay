@@ -40,6 +40,45 @@ func TestCheckMailAuthDNSReportsValidSPFAndDMARC(t *testing.T) {
 	}
 }
 
+func TestParseMailAuthChecksDefaultsToSPFDMARCDKIM(t *testing.T) {
+	checks, err := ParseMailAuthChecks("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []MailAuthCheck{MailAuthSPF, MailAuthDMARC, MailAuthDKIM}
+	if strings.Join(mailAuthChecksForTest(checks), ",") != strings.Join(mailAuthChecksForTest(want), ",") {
+		t.Fatalf("checks = %#v, want %#v", checks, want)
+	}
+}
+
+func TestParseMailAuthChecksAcceptsSelectedChecks(t *testing.T) {
+	checks, err := ParseMailAuthChecks("spf,dkim,spf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []MailAuthCheck{MailAuthSPF, MailAuthDKIM}
+	if strings.Join(mailAuthChecksForTest(checks), ",") != strings.Join(mailAuthChecksForTest(want), ",") {
+		t.Fatalf("checks = %#v, want %#v", checks, want)
+	}
+}
+
+func TestParseMailAuthChecksAcceptsAll(t *testing.T) {
+	checks, err := ParseMailAuthChecks("all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []MailAuthCheck{MailAuthSPF, MailAuthDMARC, MailAuthDKIM}
+	if strings.Join(mailAuthChecksForTest(checks), ",") != strings.Join(mailAuthChecksForTest(want), ",") {
+		t.Fatalf("checks = %#v, want %#v", checks, want)
+	}
+}
+
+func TestParseMailAuthChecksRejectsUnknownCheck(t *testing.T) {
+	if _, err := ParseMailAuthChecks("spf,bimi"); err == nil {
+		t.Fatal("expected unknown check error")
+	}
+}
+
 func TestCheckMailAuthDNSReportsMissingSPF(t *testing.T) {
 	checker := testMailAuthChecker(map[string][]string{
 		"_dmarc.example.org": {"v=DMARC1; p=none"},
@@ -284,6 +323,80 @@ func TestCheckMailAuthDNSReportsLowDKIMTTL(t *testing.T) {
 	}
 }
 
+func TestMailAuthOnlyDefaultDoesNotFailWithoutDKIMSelector(t *testing.T) {
+	checker := testMailAuthChecker(map[string][]string{
+		"example.org":        {"v=spf1 mx -all"},
+		"_dmarc.example.org": {"v=DMARC1; p=reject"},
+	})
+	var stdout bytes.Buffer
+
+	ok, err := runWithChecker(context.Background(), Options{
+		EmailAddress: "alice@example.org",
+		MailAuthOnly: true,
+		MailAuthChecks: []MailAuthCheck{
+			MailAuthSPF,
+			MailAuthDMARC,
+			MailAuthDKIM,
+		},
+	}, &stdout, checker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatalf("default DKIM selector warning should not fail mail-auth-only:\n%s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "DKIM DNS selector records were not tested") {
+		t.Fatalf("expected DKIM selector warning in output:\n%s", stdout.String())
+	}
+}
+
+func TestMailAuthOnlyExplicitDKIMFailsWithoutSelector(t *testing.T) {
+	checker := testMailAuthChecker(map[string][]string{
+		"example.org":        {"v=spf1 mx -all"},
+		"_dmarc.example.org": {"v=DMARC1; p=reject"},
+	})
+	var stdout bytes.Buffer
+
+	ok, err := runWithChecker(context.Background(), Options{
+		EmailAddress:   "alice@example.org",
+		MailAuthOnly:   true,
+		MailAuthChecks: []MailAuthCheck{MailAuthDKIM},
+		RequireDKIMDNS: true,
+	}, &stdout, checker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatalf("explicit DKIM without selector should fail:\n%s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "DKIM DNS selector records were not tested") {
+		t.Fatalf("expected DKIM selector failure in output:\n%s", stdout.String())
+	}
+}
+
+func TestMailAuthOnlySelectedSPFDMARCSkipsDKIM(t *testing.T) {
+	checker := testMailAuthChecker(map[string][]string{
+		"example.org":        {"v=spf1 mx -all"},
+		"_dmarc.example.org": {"v=DMARC1; p=reject"},
+	})
+	var stdout bytes.Buffer
+
+	ok, err := runWithChecker(context.Background(), Options{
+		EmailAddress:   "alice@example.org",
+		MailAuthOnly:   true,
+		MailAuthChecks: []MailAuthCheck{MailAuthSPF, MailAuthDMARC},
+	}, &stdout, checker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatalf("expected SPF+DMARC mail-auth-only to pass:\n%s", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "DKIM") {
+		t.Fatalf("SPF+DMARC selection should skip DKIM:\n%s", stdout.String())
+	}
+}
+
 func TestMailAuthWarningsDoNotFailRun(t *testing.T) {
 	checker := testChecker(map[string]testResponse{
 		"https://example.org/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress=alice%40example.org": {
@@ -309,6 +422,14 @@ func TestMailAuthWarningsDoNotFailRun(t *testing.T) {
 	if !strings.Contains(stdout.String(), "Summary: PASS (with warnings)") {
 		t.Fatalf("expected warning summary:\n%s", stdout.String())
 	}
+}
+
+func mailAuthChecksForTest(checks []MailAuthCheck) []string {
+	values := make([]string, 0, len(checks))
+	for _, check := range checks {
+		values = append(values, string(check))
+	}
+	return values
 }
 
 func TestSkipMailAuthDNSSuppressesMailAuthSection(t *testing.T) {
@@ -342,6 +463,9 @@ func testMailAuthChecker(records map[string][]string) Checker {
 			if txt, ok := records[name]; ok {
 				return txt, nil
 			}
+			return nil, errors.New("no such host")
+		},
+		LookupNS: func(ctx context.Context, name string) ([]*net.NS, error) {
 			return nil, errors.New("no such host")
 		},
 	}

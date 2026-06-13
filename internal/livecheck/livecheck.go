@@ -32,6 +32,9 @@ type Options struct {
 	InsecureTLS     bool
 	Verbose         bool
 	SkipMailAuthDNS bool
+	MailAuthOnly    bool
+	MailAuthChecks  []MailAuthCheck
+	RequireDKIMDNS  bool
 	MailSetupOnly   bool
 	DKIMSelectors   []string
 	MinDNSTTL       uint32
@@ -149,6 +152,21 @@ func runWithChecker(ctx context.Context, opts Options, stdout io.Writer, checker
 			} else {
 				fmt.Fprintln(stdout, "\nSummary: PASS")
 			}
+			return true, nil
+		}
+		fmt.Fprintln(stdout, "\nSummary: FAIL")
+		return false, nil
+	}
+
+	if opts.MailAuthOnly {
+		minDNSTTL := opts.MinDNSTTL
+		if minDNSTTL == 0 {
+			minDNSTTL = 3600
+		}
+		mailAuthResult := checker.CheckMailAuthDNSSelected(ctx, domain, opts.DKIMSelectors, minDNSTTL, opts.MailAuthChecks, true, opts.RequireDKIMDNS)
+		writeResult(stdout, mailAuthResult, true)
+		if mailAuthResult.Passed {
+			fmt.Fprintln(stdout, "\nSummary: PASS")
 			return true, nil
 		}
 		fmt.Fprintln(stdout, "\nSummary: FAIL")

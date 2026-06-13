@@ -34,6 +34,8 @@ func run(args []string) error {
 	verbose := fs.Bool("v", false, "show optional failed discovery attempts even when a profile passes")
 	configPath := fs.String("livecheck-config", "", "local KEY=value config file for livecheck secrets/options")
 	skipMailAuthDNS := fs.Bool("skip-mail-auth-dns", false, "skip advisory SPF, DMARC, and DKIM DNS checks")
+	mailAuthOnly := fs.Bool("mail-auth-only", false, "only run SPF, DMARC, and DKIM mail-auth DNS checks")
+	mailAuthChecksFlag := fs.String("mail-auth-checks", "", "comma-separated mail-auth checks to run: spf,dmarc,dkim or all; default spf,dmarc,dkim")
 	minDNSTTLFlag := fs.Int("min-dns-ttl", -1, "minimum recommended authoritative DNS TTL in seconds")
 	dkimSelectors := fs.String("dkim-selectors", "", "comma-separated DKIM selectors to check, overrides DKIM_SELECTORS")
 	mailSetupOnly := fs.Bool("mail-setup-only", false, "only run credentialed IMAP/SMTP round-trip setup testing")
@@ -47,6 +49,7 @@ func run(args []string) error {
 		}
 		return err
 	}
+	mailAuthChecksExplicit := flagWasSet(fs, "mail-auth-checks")
 	fileConfig, err := readLivecheckConfig(*configPath)
 	if err != nil {
 		return err
@@ -70,6 +73,10 @@ func run(args []string) error {
 		return err
 	}
 	parsedDKIMSelectors := parseDKIMSelectors(*dkimSelectors, configValue("DKIM_SELECTORS", fileConfig))
+	mailAuthChecks, err := livecheck.ParseMailAuthChecks(*mailAuthChecksFlag)
+	if err != nil {
+		return err
+	}
 
 	ok, err := livecheck.Run(context.Background(), livecheck.Options{
 		EmailAddress:    emailAddress,
@@ -77,6 +84,9 @@ func run(args []string) error {
 		InsecureTLS:     *insecure || *insecureShort,
 		Verbose:         *verbose,
 		SkipMailAuthDNS: *skipMailAuthDNS,
+		MailAuthOnly:    *mailAuthOnly,
+		MailAuthChecks:  mailAuthChecks,
+		RequireDKIMDNS:  mailAuthChecksExplicit && mailAuthChecksInclude(mailAuthChecks, livecheck.MailAuthDKIM),
 		MailSetupOnly:   *mailSetupOnly,
 		DKIMSelectors:   parsedDKIMSelectors,
 		MinDNSTTL:       minDNSTTL,
@@ -115,6 +125,10 @@ options:
              LIVECHECK_SENDER_AUTOCONFIG, LIVECHECK_MIN_DNS_TTL, and DKIM_SELECTORS
   -skip-mail-auth-dns
              skip advisory SPF, DMARC, and DKIM DNS checks
+  -mail-auth-only
+             only run selected SPF, DMARC, and DKIM mail-auth DNS checks
+  -mail-auth-checks
+             comma-separated checks for -mail-auth-only: spf,dmarc,dkim or all, default spf,dmarc,dkim
   -min-dns-ttl
              warn when authoritative DNS TTL is below this value, default 3600
   -dkim-selectors
@@ -152,6 +166,25 @@ func parseDKIMSelectors(cliValue, envValue string) []string {
 		selectors = append(selectors, selector)
 	}
 	return selectors
+}
+
+func flagWasSet(fs *flag.FlagSet, name string) bool {
+	found := false
+	fs.Visit(func(flag *flag.Flag) {
+		if flag.Name == name {
+			found = true
+		}
+	})
+	return found
+}
+
+func mailAuthChecksInclude(checks []livecheck.MailAuthCheck, want livecheck.MailAuthCheck) bool {
+	for _, check := range checks {
+		if check == want || check == livecheck.MailAuthAll {
+			return true
+		}
+	}
+	return false
 }
 
 func minDNSTTL(cliValue int, envValue string) (uint32, error) {
