@@ -117,6 +117,9 @@ write_backend_fallback() {
     cat >>"$NGINX_CONFIG" <<EOF
 
     location / {
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
         proxy_pass ${BACKEND_URL};
     }
 EOF
@@ -172,6 +175,14 @@ EOF
 }
 
 : >"$NGINX_CONFIG"
+
+cat >>"$NGINX_CONFIG" <<'EOF'
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+EOF
 
 if [ -n "$BACKEND_HOSTS$OVERLAY_ONLY_HOSTS" ]; then
     validate_host_config

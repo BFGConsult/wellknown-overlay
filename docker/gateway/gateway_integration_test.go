@@ -78,6 +78,7 @@ func TestGatewayIntegration(t *testing.T) {
 		baseURL := gatewayBaseURL(t, ctx, repoRoot, gatewayName)
 		waitForHealth(t, baseURL)
 
+		assertBackendFallbackSupportsWebSockets(t, ctx, repoRoot, gatewayName)
 		assertGET(t, baseURL+"/", http.StatusOK, "backend ok\n")
 		assertGET(t, baseURL+"/healthz", http.StatusOK, "ok\n")
 		assertGET(t, baseURL+"/mail/config-v1.1.xml", http.StatusOK, "<clientConfig")
@@ -297,6 +298,22 @@ func cleanupDocker(t *testing.T, ctx context.Context, args ...string) {
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Logf("cleanup docker %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+}
+
+func assertBackendFallbackSupportsWebSockets(t *testing.T, ctx context.Context, repoRoot, gatewayName string) {
+	t.Helper()
+
+	config := runDockerOutput(t, ctx, repoRoot, "exec", gatewayName, "cat", "/etc/nginx/conf.d/default.conf")
+	for _, directive := range []string{
+		"map $http_upgrade $connection_upgrade",
+		"proxy_http_version 1.1;",
+		"proxy_set_header Upgrade $http_upgrade;",
+		"proxy_set_header Connection $connection_upgrade;",
+	} {
+		if !strings.Contains(config, directive) {
+			t.Fatalf("nginx config does not contain %q:\n%s", directive, config)
+		}
 	}
 }
 
