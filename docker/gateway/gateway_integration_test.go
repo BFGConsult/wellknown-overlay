@@ -435,6 +435,10 @@ func assertBackendFallbackSupportsWebSockets(t *testing.T, ctx context.Context, 
 		"proxy_http_version 1.1;",
 		"proxy_set_header Upgrade $http_upgrade;",
 		"proxy_set_header Connection $connection_upgrade;",
+		"proxy_set_header Host $host;",
+		"proxy_set_header X-Forwarded-Host $host;",
+		"proxy_set_header X-Forwarded-Proto $scheme;",
+		"proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;",
 	} {
 		if !strings.Contains(config, directive) {
 			t.Fatalf("nginx config does not contain %q:\n%s", directive, config)
