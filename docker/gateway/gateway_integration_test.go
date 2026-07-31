@@ -148,8 +148,30 @@ func TestGatewayIntegration(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(overlayRoot, "target-overlay.txt"), []byte("overlay target\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
+		if err := os.WriteFile(filepath.Join(overlayRoot, "ordered.txt"), []byte("first ordered rule\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
 		configPath := filepath.Join(t.TempDir(), "overlay.json")
 		configBody := `{
+  "rules": [
+    {
+      "match": {"path": "/ordered.txt"},
+      "file": "ordered.txt",
+      "content_type": "text/plain; charset=utf-8"
+    },
+    {
+      "match": {"path": "/ordered-sitemap.xml"},
+      "status": 404
+    },
+    {
+      "match": {"hosts": ["redirect.example.org"]},
+      "redirect": {
+        "origin": "https://destination.example.org",
+        "status": 308,
+        "preserve_request_uri": true
+      }
+    }
+  ],
   "routes": [
     {
       "path": "/target.txt",
@@ -197,7 +219,7 @@ func TestGatewayIntegration(t *testing.T) {
 			configPath,
 			overlayRoot,
 			"BACKEND_HOSTS=example.org",
-			"OVERLAY_ONLY_HOSTS=autoconfig.example.org,autodiscover.example.org",
+			"OVERLAY_ONLY_HOSTS=autoconfig.example.org,autodiscover.example.org,redirect.example.org",
 		)
 		t.Cleanup(func() {
 			cleanupDocker(t, context.Background(), "rm", "-f", gatewayName)
@@ -213,6 +235,10 @@ func TestGatewayIntegration(t *testing.T) {
 		assertGETHost(t, baseURL, "example.org", "/sitemap.xml", http.StatusOK, "backend sitemap")
 		assertGETHost(t, baseURL, "autoconfig.example.org", "/sitemap.xml", http.StatusNotFound, "")
 		assertGETHost(t, baseURL, "autoconfig.example.org", "/missing.txt", http.StatusNotFound, "404 Not Found")
+		assertGETHost(t, baseURL, "redirect.example.org", "/ordered.txt", http.StatusOK, "first ordered rule\n")
+		assertGETHost(t, baseURL, "autoconfig.example.org", "/ordered.txt", http.StatusOK, "first ordered rule\n")
+		assertGETHost(t, baseURL, "redirect.example.org", "/ordered-sitemap.xml", http.StatusNotFound, "")
+		assertRedirectHost(t, baseURL, "redirect.example.org", "/other/path?value=one", http.StatusPermanentRedirect, "https://destination.example.org/other/path?value=one")
 
 		if err := os.WriteFile(backendRobots, []byte("User-agent: *\nDisallow: /backend-v2\n"), 0o644); err != nil {
 			t.Fatal(err)
@@ -340,6 +366,34 @@ func assertGETHost(t *testing.T, baseURL, host, path string, wantStatus int, wan
 	}
 	req.Host = host
 	return doAssert(t, client, req, wantStatus, wantBodySubstring)
+}
+
+func assertRedirectHost(t *testing.T, baseURL, host, path string, wantStatus int, wantLocation string) {
+	t.Helper()
+
+	client := http.Client{
+		Timeout: 5 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	url := baseURL + path
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
+	}
+	req.Host = host
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != wantStatus {
+		t.Fatalf("GET %s host %q status = %d, want %d", url, host, resp.StatusCode, wantStatus)
+	}
+	if got := resp.Header.Get("Location"); got != wantLocation {
+		t.Fatalf("GET %s host %q Location = %q, want %q", url, host, got, wantLocation)
+	}
 }
 
 func assertPOST(t *testing.T, url, requestBody string, wantStatus int, wantBodySubstring string) string {

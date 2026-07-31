@@ -18,6 +18,7 @@ const (
 
 type Config struct {
 	Routes      []Route      `json:"routes,omitempty"`
+	Rules       []Rule       `json:"rules,omitempty"`
 	MailAccount *MailAccount `json:"mail_account,omitempty"`
 }
 
@@ -90,8 +91,13 @@ func LoadConfig(filename string) (Config, error) {
 }
 
 func (cfg Config) Validate() error {
-	if len(cfg.Routes) == 0 && cfg.MailAccount == nil {
+	if len(cfg.Routes) == 0 && len(cfg.Rules) == 0 && cfg.MailAccount == nil {
 		return errors.New("config must declare at least one route or module")
+	}
+	for i, rule := range cfg.Rules {
+		if err := rule.Validate(); err != nil {
+			return fmt.Errorf("rules[%d]: %w", i, err)
+		}
 	}
 
 	seen := make(map[string]struct{}, len(cfg.Routes))

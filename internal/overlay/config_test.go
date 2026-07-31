@@ -1,6 +1,61 @@
 package overlay
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+func TestConfigValidateAcceptsOrderedGatewayRules(t *testing.T) {
+	var cfg Config
+	err := json.Unmarshal([]byte(`{
+  "rules": [
+    {"match":{"path":"/robots.txt"},"file":"robots.txt","content_type":"text/plain"},
+    {"match":{"hosts":["efnu.no"]},"redirect":{"origin":"https://efn.no","status":308,"preserve_request_uri":true}},
+    {"match":"*","status":404}
+  ]
+}`), &cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Rules[2].Match.All {
+		t.Fatal(`expected "match": "*" to set unconditional match`)
+	}
+}
+
+func TestConfigValidateRejectsInvalidGatewayRules(t *testing.T) {
+	tests := []struct {
+		name       string
+		configJSON string
+		want       string
+	}{
+		{name: "missing match", configJSON: `{"rules":[{"status":404}]}`, want: "match is required"},
+		{name: "empty match", configJSON: `{"rules":[{"match":{},"status":404}]}`, want: "empty match is invalid"},
+		{name: "empty hosts", configJSON: `{"rules":[{"match":{"hosts":[]},"status":404}]}`, want: "must not be empty"},
+		{name: "host wildcard", configJSON: `{"rules":[{"match":{"hosts":["*"]},"status":404}]}`, want: "omit hosts"},
+		{name: "path and prefix", configJSON: `{"rules":[{"match":{"path":"/a","path_prefix":"/"},"status":404}]}`, want: "both path and path_prefix"},
+		{name: "multiple actions", configJSON: `{"rules":[{"match":"*","status":404,"file":"error.txt"}]}`, want: "exactly one"},
+		{name: "reserved rewrite", configJSON: `{"rules":[{"match":"*","rewrite":{"path":"/new"}}]}`, want: "reserved but not supported"},
+		{name: "redirect path", configJSON: `{"rules":[{"match":"*","redirect":{"origin":"https://example.org/path","status":308}}]}`, want: "must not contain"},
+		{name: "unknown match field", configJSON: `{"rules":[{"match":{"method":"GET"},"status":404}]}`, want: "unknown match field"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg Config
+			err := json.Unmarshal([]byte(tt.configJSON), &cfg)
+			if err == nil {
+				err = cfg.Validate()
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("err = %v, want error containing %q", err, tt.want)
+			}
+		})
+	}
+}
 
 func TestConfigValidateRejectsDuplicateRoutes(t *testing.T) {
 	cfg := Config{

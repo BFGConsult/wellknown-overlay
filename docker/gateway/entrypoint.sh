@@ -149,6 +149,20 @@ write_targeted_locations() {
         -backend-url "$BACKEND_URL" >>"$NGINX_CONFIG"
 }
 
+write_ordered_rule_map() {
+    wellknown-overlay gateway-rules \
+        -config "$OVERLAY_CONFIG" \
+        -root "$OVERLAY_ROOT" \
+        -section map >>"$NGINX_CONFIG"
+}
+
+write_ordered_rule_server() {
+    wellknown-overlay gateway-rules \
+        -config "$OVERLAY_CONFIG" \
+        -root "$OVERLAY_ROOT" \
+        -section server >>"$NGINX_CONFIG"
+}
+
 write_server() {
     listen_directive="$1"
     server_names="$2"
@@ -160,6 +174,7 @@ server {
     server_name ${server_names};
 
 EOF
+    write_ordered_rule_server
     write_overlay_locations
     write_targeted_locations "$fallback"
     if [ "$fallback" = "backend" ]; then
@@ -202,6 +217,8 @@ map $http_upgrade $connection_upgrade {
 }
 
 EOF
+
+write_ordered_rule_map
 
 if [ -n "$BACKEND_HOSTS$OVERLAY_ONLY_HOSTS" ]; then
     validate_host_config

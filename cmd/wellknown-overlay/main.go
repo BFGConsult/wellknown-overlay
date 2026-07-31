@@ -43,12 +43,46 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return healthcheck(args[2:])
 	case "gateway-routes":
 		return gatewayRoutes(args[2:], stdout)
+	case "gateway-rules":
+		return gatewayRules(args[2:], stdout)
 	case "help", "-h", "--help":
 		usage(stdout)
 		return nil
 	default:
 		usage(stderr)
 		return fmt.Errorf("unknown command %q", args[1])
+	}
+}
+
+func gatewayRules(args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("gateway-rules", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	configPath := fs.String("config", "overlay.json", "configuration file")
+	root := fs.String("root", ".", "root directory for rule files")
+	section := fs.String("section", "", "nginx section to render: map or server")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := overlay.LoadConfig(*configPath)
+	if err != nil {
+		return err
+	}
+	switch *section {
+	case "map":
+		gatewayconfig.RenderOrderedRuleMap(stdout, cfg)
+		return nil
+	case "server":
+		if !filepath.IsAbs(*root) {
+			*root, err = filepath.Abs(*root)
+			if err != nil {
+				return err
+			}
+		}
+		gatewayconfig.RenderOrderedRuleServer(stdout, cfg, *root)
+		return nil
+	default:
+		return errors.New(`gateway-rules requires -section map or -section server`)
 	}
 }
 
@@ -90,7 +124,7 @@ func validate(args []string, stdout io.Writer) error {
 		return err
 	}
 
-	fmt.Fprintf(stdout, "ok: %d route(s), %d module route(s)\n", len(cfg.Routes), len(cfg.ModulePaths()))
+	fmt.Fprintf(stdout, "ok: %d route(s), %d rule(s), %d module route(s)\n", len(cfg.Routes), len(cfg.Rules), len(cfg.ModulePaths()))
 	return nil
 }
 
@@ -227,6 +261,8 @@ commands:
   render    render one configured route to stdout
   gateway-routes
             render target-specific nginx route locations
+  gateway-rules
+            render ordered nginx request rules
   healthcheck
             check an overlay HTTP endpoint`)
 }

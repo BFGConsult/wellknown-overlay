@@ -55,6 +55,71 @@ Example:
 
 Route paths must be absolute and are matched exactly.
 
+### Ordered Gateway Rules
+
+Gateway deployments can apply an ordered request-rule list before built-in
+overlay modules, targeted routes, and host fallbacks. The first matching rule
+owns the request:
+
+```json
+{
+  "rules": [
+    {
+      "match": {
+        "path": "/robots.txt"
+      },
+      "file": "robots-overlay.txt",
+      "content_type": "text/plain; charset=utf-8"
+    },
+    {
+      "match": {
+        "path": "/sitemap.xml"
+      },
+      "status": 404
+    },
+    {
+      "match": {
+        "hosts": ["efnu.no"]
+      },
+      "redirect": {
+        "origin": "https://efn.no",
+        "status": 308,
+        "preserve_request_uri": true
+      }
+    },
+    {
+      "match": {
+        "hosts": ["www.efnu.no"]
+      },
+      "redirect": {
+        "origin": "https://www.efn.no",
+        "status": 308,
+        "preserve_request_uri": true
+      }
+    }
+  ]
+}
+```
+
+Within a match object, omitted `hosts` means all gateway hosts and omitted
+`path` or `path_prefix` means all paths. Specified predicates are combined with
+AND. An empty match object is invalid; use the explicit form `"match": "*"`
+for an unconditional rule. `hosts` must contain one or more exact lowercase
+hostnames. `path` and `path_prefix` are mutually exclusive.
+
+A rule declares exactly one action:
+
+- `file` serves a file below the overlay root and may set `content_type`.
+- `status` returns an HTTP status from 300 through 599.
+- `redirect` returns 301, 302, 303, 307, or 308 to an absolute HTTP(S)
+  destination origin. `preserve_request_uri` appends the original path and
+  query string.
+- `rewrite` is reserved for a future internal-rewrite action. Configurations
+  declaring it are currently rejected as unsupported.
+
+Requests that match no rule continue through normal overlay processing. Rules
+are gateway-only; the core overlay responder does not apply them.
+
 ### Gateway-Targeted Routes
 
 Gateway deployments can assign an exact route to one host class. A targeted
