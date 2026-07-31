@@ -15,6 +15,91 @@ func TestConfigValidateRejectsDuplicateRoutes(t *testing.T) {
 	}
 }
 
+func TestConfigValidateAcceptsSamePathForDifferentTargets(t *testing.T) {
+	cfg := Config{Routes: []Route{
+		{Path: "/robots.txt", File: "robots-backend.txt", Target: RouteTargetBackend},
+		{Path: "/robots.txt", File: "robots-overlay.txt", Target: RouteTargetOverlayOnly},
+	}}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConfigValidateAcceptsBackendSourceForOverlayOnlyTarget(t *testing.T) {
+	cfg := Config{Routes: []Route{{
+		Path:          "/robots.txt",
+		Target:        RouteTargetOverlayOnly,
+		Source:        RouteSourceBackend,
+		SourceHost:    "example.org",
+		CacheStatuses: []int{200, 404},
+	}}}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConfigValidateAcceptsTargetedErrorStatus(t *testing.T) {
+	cfg := Config{Routes: []Route{{
+		Path:   "/sitemap.xml",
+		Target: RouteTargetOverlayOnly,
+		Status: 404,
+	}}}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConfigValidateRejectsInvalidTargetedSources(t *testing.T) {
+	tests := []struct {
+		name  string
+		route Route
+	}{
+		{
+			name:  "file and source",
+			route: Route{Path: "/robots.txt", File: "robots.txt", Target: RouteTargetOverlayOnly, Source: RouteSourceBackend, SourceHost: "example.org"},
+		},
+		{
+			name:  "backend source on backend target",
+			route: Route{Path: "/robots.txt", Target: RouteTargetBackend, Source: RouteSourceBackend, SourceHost: "example.org"},
+		},
+		{
+			name:  "backend source without host",
+			route: Route{Path: "/robots.txt", Target: RouteTargetOverlayOnly, Source: RouteSourceBackend},
+		},
+		{
+			name:  "source host with scheme",
+			route: Route{Path: "/robots.txt", Target: RouteTargetOverlayOnly, Source: RouteSourceBackend, SourceHost: "https://example.org"},
+		},
+		{
+			name:  "cache statuses without source",
+			route: Route{Path: "/robots.txt", File: "robots.txt", Target: RouteTargetOverlayOnly, CacheStatuses: []int{404}},
+		},
+		{
+			name:  "invalid cache status",
+			route: Route{Path: "/robots.txt", Target: RouteTargetOverlayOnly, Source: RouteSourceBackend, SourceHost: "example.org", CacheStatuses: []int{700}},
+		},
+		{
+			name:  "error status without target",
+			route: Route{Path: "/sitemap.xml", Status: 404},
+		},
+		{
+			name:  "error status with source",
+			route: Route{Path: "/sitemap.xml", Target: RouteTargetOverlayOnly, Status: 404, Source: RouteSourceBackend, SourceHost: "example.org"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := (Config{Routes: []Route{tt.route}}).Validate(); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+}
+
 func TestConfigValidateRejectsEscapingFiles(t *testing.T) {
 	cfg := Config{
 		Routes: []Route{

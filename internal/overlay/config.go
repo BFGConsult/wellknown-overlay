@@ -4,9 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"strings"
+)
+
+const (
+	RouteTargetBackend     = "backend"
+	RouteTargetOverlayOnly = "overlay_only"
+	RouteSourceBackend     = "backend"
 )
 
 type Config struct {
@@ -15,9 +22,14 @@ type Config struct {
 }
 
 type Route struct {
-	Path        string `json:"path"`
-	File        string `json:"file"`
-	ContentType string `json:"content_type,omitempty"`
+	Path          string `json:"path"`
+	File          string `json:"file,omitempty"`
+	ContentType   string `json:"content_type,omitempty"`
+	Target        string `json:"target,omitempty"`
+	Source        string `json:"source,omitempty"`
+	SourceHost    string `json:"source_host,omitempty"`
+	Status        int    `json:"status,omitempty"`
+	CacheStatuses []int  `json:"cache_statuses,omitempty"`
 }
 
 type MailAccount struct {
@@ -83,6 +95,7 @@ func (cfg Config) Validate() error {
 	}
 
 	seen := make(map[string]struct{}, len(cfg.Routes))
+	seenPaths := make(map[string]struct{}, len(cfg.Routes))
 	for i, route := range cfg.Routes {
 		if route.Path == "" {
 			return fmt.Errorf("routes[%d].path is required", i)
@@ -93,34 +106,102 @@ func (cfg Config) Validate() error {
 		if path.Clean(route.Path) != route.Path {
 			return fmt.Errorf("routes[%d].path must be clean", i)
 		}
-		if _, ok := seen[route.Path]; ok {
-			return fmt.Errorf("duplicate route path %q", route.Path)
+		if route.Target != "" && route.Target != RouteTargetBackend && route.Target != RouteTargetOverlayOnly {
+			return fmt.Errorf("routes[%d].target must be %q or %q", i, RouteTargetBackend, RouteTargetOverlayOnly)
 		}
-		seen[route.Path] = struct{}{}
 
-		if route.File == "" {
-			return fmt.Errorf("routes[%d].file is required", i)
+		key := route.Path + "\x00" + route.Target
+		if _, ok := seen[key]; ok {
+			return fmt.Errorf("duplicate route path %q for target %q", route.Path, route.Target)
 		}
-		if strings.HasPrefix(route.File, "/") {
-			return fmt.Errorf("routes[%d].file must be relative", i)
+		seen[key] = struct{}{}
+		seenPaths[route.Path] = struct{}{}
+
+		if route.Status != 0 {
+			if route.Status < 300 || route.Status > 599 {
+				return fmt.Errorf("routes[%d].status must be an HTTP error status from 300 through 599", i)
+			}
+			if route.Target == "" {
+				return fmt.Errorf("routes[%d].status requires target", i)
+			}
+			if route.File != "" || route.Source != "" || route.SourceHost != "" || route.ContentType != "" || len(route.CacheStatuses) != 0 {
+				return fmt.Errorf("routes[%d].status cannot be combined with file, source, source_host, content_type, or cache_statuses", i)
+			}
+			continue
 		}
-		if path.Clean(route.File) != route.File || strings.HasPrefix(route.File, "../") || route.File == ".." {
-			return fmt.Errorf("routes[%d].file must stay within the root", i)
+
+		if route.File != "" && route.Source != "" {
+			return fmt.Errorf("routes[%d] cannot declare both file and source", i)
+		}
+		if route.File == "" && route.Source == "" {
+			return fmt.Errorf("routes[%d] must declare file or source", i)
+		}
+		if route.File != "" {
+			if strings.HasPrefix(route.File, "/") {
+				return fmt.Errorf("routes[%d].file must be relative", i)
+			}
+			if path.Clean(route.File) != route.File || strings.HasPrefix(route.File, "../") || route.File == ".." {
+				return fmt.Errorf("routes[%d].file must stay within the root", i)
+			}
+		}
+
+		if route.Source != "" {
+			if route.Source != RouteSourceBackend {
+				return fmt.Errorf("routes[%d].source must be %q", i, RouteSourceBackend)
+			}
+			if route.Target != RouteTargetOverlayOnly {
+				return fmt.Errorf("routes[%d] with backend source must target %q", i, RouteTargetOverlayOnly)
+			}
+			if err := validateSourceHost(route.SourceHost); err != nil {
+				return fmt.Errorf("routes[%d].source_host: %w", i, err)
+			}
+			if route.ContentType != "" {
+				return fmt.Errorf("routes[%d].content_type cannot override a backend source", i)
+			}
+		} else if route.SourceHost != "" {
+			return fmt.Errorf("routes[%d].source_host requires source", i)
+		} else if len(route.CacheStatuses) != 0 {
+			return fmt.Errorf("routes[%d].cache_statuses requires source", i)
+		}
+
+		cacheStatuses := make(map[int]struct{}, len(route.CacheStatuses))
+		for _, status := range route.CacheStatuses {
+			if status < 100 || status > 599 {
+				return fmt.Errorf("routes[%d].cache_statuses contains invalid HTTP status %d", i, status)
+			}
+			if _, ok := cacheStatuses[status]; ok {
+				return fmt.Errorf("routes[%d].cache_statuses contains duplicate HTTP status %d", i, status)
+			}
+			cacheStatuses[status] = struct{}{}
 		}
 	}
 
 	if cfg.MailAccount != nil {
 		for _, modulePath := range cfg.MailAccount.Paths() {
-			if _, ok := seen[modulePath]; ok {
+			if _, ok := seenPaths[modulePath]; ok {
 				return fmt.Errorf("mail_account route conflicts with static route %q", modulePath)
 			}
-			seen[modulePath] = struct{}{}
+			seenPaths[modulePath] = struct{}{}
 		}
 		if err := cfg.MailAccount.Validate(); err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+func validateSourceHost(host string) error {
+	if host == "" {
+		return errors.New("is required for backend source")
+	}
+	if strings.TrimSpace(host) != host || strings.ContainsAny(host, "/\r\n\t") {
+		return errors.New("must be a hostname without a scheme, path, or whitespace")
+	}
+	parsed, err := url.Parse("http://" + host)
+	if err != nil || parsed.Host != host || parsed.Hostname() == "" || parsed.Port() != "" || parsed.User != nil {
+		return errors.New("must be a hostname without a scheme or port")
+	}
 	return nil
 }
 

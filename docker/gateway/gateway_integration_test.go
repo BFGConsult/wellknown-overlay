@@ -122,9 +122,137 @@ func TestGatewayIntegration(t *testing.T) {
 		assertPOSTHost(t, baseURL, "autodiscover.example.org", "/Autodiscover/Autodiscover.xml", autodiscoverRequest("alice@example.org"), http.StatusOK, "<Autodiscover")
 		assertGETHost(t, baseURL, "stray.example.org", "/", http.StatusNotFound, "")
 	})
+
+	t.Run("targeted routes and cached backend source", func(t *testing.T) {
+		backendName := fmt.Sprintf("wellknown-overlay-backend-%d", time.Now().UnixNano())
+		backendRoot := t.TempDir()
+		if err := os.WriteFile(filepath.Join(backendRoot, "index.html"), []byte("backend ok\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		backendRobots := filepath.Join(backendRoot, "robots.txt")
+		if err := os.WriteFile(backendRobots, []byte("User-agent: *\nDisallow: /backend-v1\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(backendRoot, "sitemap.xml"), []byte("<urlset>backend sitemap</urlset>\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		runDocker(t, ctx, repoRoot, "run", "-d", "--name", backendName, "--network", network, "-v", backendRoot+":/usr/share/nginx/html:ro", "nginx:1.29-alpine")
+		t.Cleanup(func() {
+			cleanupDocker(t, context.Background(), "rm", "-f", backendName)
+		})
+
+		overlayRoot := t.TempDir()
+		if err := os.WriteFile(filepath.Join(overlayRoot, "target-backend.txt"), []byte("backend target\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(overlayRoot, "target-overlay.txt"), []byte("overlay target\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		configPath := filepath.Join(t.TempDir(), "overlay.json")
+		configBody := `{
+  "routes": [
+    {
+      "path": "/target.txt",
+      "file": "target-backend.txt",
+      "content_type": "text/plain; charset=utf-8",
+      "target": "backend"
+    },
+    {
+      "path": "/target.txt",
+      "file": "target-overlay.txt",
+      "content_type": "text/plain; charset=utf-8",
+      "target": "overlay_only"
+    },
+    {
+      "path": "/robots.txt",
+      "target": "overlay_only",
+      "source": "backend",
+      "source_host": "example.org"
+    },
+    {
+      "path": "/sitemap.xml",
+      "target": "overlay_only",
+      "status": 404
+    },
+    {
+      "path": "/missing.txt",
+      "target": "overlay_only",
+      "source": "backend",
+      "source_host": "example.org",
+      "cache_statuses": [404]
+    }
+  ]
+}`
+		if err := os.WriteFile(configPath, []byte(configBody), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		gatewayName := runGatewayWithConfig(
+			t,
+			ctx,
+			repoRoot,
+			image,
+			network,
+			"http://"+backendName,
+			configPath,
+			overlayRoot,
+			"BACKEND_HOSTS=example.org",
+			"OVERLAY_ONLY_HOSTS=autoconfig.example.org,autodiscover.example.org",
+		)
+		t.Cleanup(func() {
+			cleanupDocker(t, context.Background(), "rm", "-f", gatewayName)
+		})
+
+		baseURL := gatewayBaseURL(t, ctx, repoRoot, gatewayName)
+		waitForHealth(t, baseURL)
+
+		assertGETHost(t, baseURL, "example.org", "/target.txt", http.StatusOK, "backend target\n")
+		assertGETHost(t, baseURL, "autoconfig.example.org", "/target.txt", http.StatusOK, "overlay target\n")
+		assertGETHost(t, baseURL, "example.org", "/robots.txt", http.StatusOK, "Disallow: /backend-v1")
+		assertGETHost(t, baseURL, "autoconfig.example.org", "/robots.txt", http.StatusOK, "Disallow: /backend-v1")
+		assertGETHost(t, baseURL, "example.org", "/sitemap.xml", http.StatusOK, "backend sitemap")
+		assertGETHost(t, baseURL, "autoconfig.example.org", "/sitemap.xml", http.StatusNotFound, "")
+		assertGETHost(t, baseURL, "autoconfig.example.org", "/missing.txt", http.StatusNotFound, "404 Not Found")
+
+		if err := os.WriteFile(backendRobots, []byte("User-agent: *\nDisallow: /backend-v2\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(backendRoot, "missing.txt"), []byte("backend now has this file\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		assertGETHost(t, baseURL, "example.org", "/robots.txt", http.StatusOK, "Disallow: /backend-v2")
+		assertGETHost(t, baseURL, "autodiscover.example.org", "/robots.txt", http.StatusOK, "Disallow: /backend-v1")
+		assertGETHost(t, baseURL, "example.org", "/missing.txt", http.StatusOK, "backend now has this file")
+		assertGETHost(t, baseURL, "autodiscover.example.org", "/missing.txt", http.StatusNotFound, "404 Not Found")
+	})
 }
 
 func runGateway(t *testing.T, ctx context.Context, repoRoot, image, network, backendURL string, extraEnv ...string) string {
+	t.Helper()
+
+	overlayRoot := t.TempDir()
+	env := []string{
+		"MAIL_DOMAIN=example.org",
+		"MAIL_DISPLAY_NAME=Example Mail",
+		"MAIL_INCOMING_HOST=mail.example.org",
+		"MAIL_OUTGOING_HOST=mail.example.org",
+		"MAIL_SETUP_URL=https://autoconfig.example.org/mail/setup",
+	}
+	env = append(env, extraEnv...)
+	return runGatewayContainer(t, ctx, repoRoot, image, network, backendURL, []string{overlayRoot + ":/var/lib/wellknown-overlay/public:ro"}, env)
+}
+
+func runGatewayWithConfig(t *testing.T, ctx context.Context, repoRoot, image, network, backendURL, configPath, overlayRoot string, extraEnv ...string) string {
+	t.Helper()
+
+	volumes := []string{
+		configPath + ":/etc/wellknown-overlay/overlay.json:ro",
+		overlayRoot + ":/var/lib/wellknown-overlay/public:ro",
+	}
+	return runGatewayContainer(t, ctx, repoRoot, image, network, backendURL, volumes, extraEnv)
+}
+
+func runGatewayContainer(t *testing.T, ctx context.Context, repoRoot, image, network, backendURL string, volumes, env []string) string {
 	t.Helper()
 
 	name := fmt.Sprintf("wellknown-overlay-gateway-%d", time.Now().UnixNano())
@@ -133,18 +261,15 @@ func runGateway(t *testing.T, ctx context.Context, repoRoot, image, network, bac
 		"--name", name,
 		"--network", network,
 		"-p", "127.0.0.1::80",
-		"-v", t.TempDir() + ":/var/lib/wellknown-overlay/public:ro",
-		"-e", "MAIL_DOMAIN=example.org",
-		"-e", "MAIL_DISPLAY_NAME=Example Mail",
-		"-e", "MAIL_INCOMING_HOST=mail.example.org",
-		"-e", "MAIL_OUTGOING_HOST=mail.example.org",
-		"-e", "MAIL_SETUP_URL=https://autoconfig.example.org/mail/setup",
+	}
+	for _, volume := range volumes {
+		args = append(args, "-v", volume)
 	}
 	if backendURL != "" {
 		args = append(args, "-e", "BACKEND_URL="+backendURL)
 	}
-	for _, env := range extraEnv {
-		args = append(args, "-e", env)
+	for _, value := range env {
+		args = append(args, "-e", value)
 	}
 	args = append(args, image)
 

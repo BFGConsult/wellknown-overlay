@@ -10,6 +10,7 @@ BACKEND_HOSTS="${BACKEND_HOSTS:-}"
 OVERLAY_ONLY_HOSTS="${OVERLAY_ONLY_HOSTS:-}"
 NGINX_CONFIG="/etc/nginx/conf.d/default.conf"
 PLACEHOLDER_ROOT="/usr/share/wellknown-overlay/placeholder"
+CACHE_ROOT="/var/cache/nginx/wellknown-overlay"
 
 wellknown-overlay-docker-entrypoint prepare-config -config "$OVERLAY_CONFIG"
 
@@ -135,6 +136,15 @@ write_placeholder_fallback() {
 EOF
 }
 
+write_targeted_locations() {
+    target="$1"
+    wellknown-overlay gateway-routes \
+        -config "$OVERLAY_CONFIG" \
+        -root "$OVERLAY_ROOT" \
+        -target "$target" \
+        -backend-url "$BACKEND_URL" >>"$NGINX_CONFIG"
+}
+
 write_server() {
     listen_directive="$1"
     server_names="$2"
@@ -147,6 +157,7 @@ server {
 
 EOF
     write_overlay_locations
+    write_targeted_locations "$fallback"
     if [ "$fallback" = "backend" ]; then
         write_backend_fallback
     else
@@ -175,8 +186,12 @@ EOF
 }
 
 : >"$NGINX_CONFIG"
+mkdir -p "$CACHE_ROOT"
+chown nginx:nginx "$CACHE_ROOT"
 
 cat >>"$NGINX_CONFIG" <<'EOF'
+proxy_cache_path /var/cache/nginx/wellknown-overlay levels=1:2 keys_zone=wellknown_overlay_routes:1m max_size=10m inactive=24h use_temp_path=off;
+
 map $http_upgrade $connection_upgrade {
     default upgrade;
     '' close;
@@ -195,20 +210,20 @@ if [ -n "$BACKEND_HOSTS$OVERLAY_ONLY_HOSTS" ]; then
     fi
 
     if [ -n "$overlay_names" ]; then
-        write_server "listen 80;" "$overlay_names" "placeholder"
+        write_server "listen 80;" "$overlay_names" "overlay_only"
     fi
 
     if has_star "$BACKEND_HOSTS"; then
         write_server "listen 80 default_server;" "_" "backend"
     elif has_star "$OVERLAY_ONLY_HOSTS"; then
-        write_server "listen 80 default_server;" "_" "placeholder"
+        write_server "listen 80 default_server;" "_" "overlay_only"
     else
         write_default_404
     fi
 elif [ -n "$BACKEND_URL" ]; then
     write_server "listen 80;" "_" "backend"
 else
-    write_server "listen 80;" "_" "placeholder"
+    write_server "listen 80;" "_" "overlay_only"
 fi
 
 wellknown-overlay serve -config "$OVERLAY_CONFIG" -root "$OVERLAY_ROOT" -listen "$OVERLAY_LISTEN" &

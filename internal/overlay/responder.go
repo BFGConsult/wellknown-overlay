@@ -27,6 +27,11 @@ type Responder struct {
 func NewResponder(cfg Config, files fs.FS) *Responder {
 	routes := make(map[string]Route, len(cfg.Routes))
 	for _, route := range cfg.Routes {
+		// Targeted routes are rendered directly by the gateway's nginx server
+		// blocks. The standalone overlay server only exposes untargeted routes.
+		if route.Target != "" {
+			continue
+		}
 		routes[route.Path] = route
 	}
 

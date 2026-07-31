@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/BFGConsult/wellknown-overlay/internal/gatewayconfig"
 	"github.com/BFGConsult/wellknown-overlay/internal/overlay"
 )
 
@@ -40,6 +41,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return render(args[2:], stdout)
 	case "healthcheck":
 		return healthcheck(args[2:])
+	case "gateway-routes":
+		return gatewayRoutes(args[2:], stdout)
 	case "help", "-h", "--help":
 		usage(stdout)
 		return nil
@@ -47,6 +50,31 @@ func run(args []string, stdout, stderr io.Writer) error {
 		usage(stderr)
 		return fmt.Errorf("unknown command %q", args[1])
 	}
+}
+
+func gatewayRoutes(args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("gateway-routes", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	configPath := fs.String("config", "overlay.json", "configuration file")
+	root := fs.String("root", ".", "root directory for route files")
+	target := fs.String("target", "", "gateway route target")
+	backendURL := fs.String("backend-url", "", "gateway backend URL")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := overlay.LoadConfig(*configPath)
+	if err != nil {
+		return err
+	}
+	if !filepath.IsAbs(*root) {
+		*root, err = filepath.Abs(*root)
+		if err != nil {
+			return err
+		}
+	}
+
+	return gatewayconfig.RenderTargetLocations(stdout, cfg, *root, *target, *backendURL)
 }
 
 func validate(args []string, stdout io.Writer) error {
@@ -197,6 +225,8 @@ commands:
   validate  validate an overlay config
   serve     serve configured overlay routes over HTTP
   render    render one configured route to stdout
+  gateway-routes
+            render target-specific nginx route locations
   healthcheck
             check an overlay HTTP endpoint`)
 }

@@ -55,6 +55,90 @@ Example:
 
 Route paths must be absolute and are matched exactly.
 
+### Gateway-Targeted Routes
+
+Gateway deployments can assign an exact route to one host class. A targeted
+local route is served directly by nginx from the overlay root:
+
+```json
+{
+  "routes": [
+    {
+      "path": "/robots.txt",
+      "file": "robots-overlay.txt",
+      "content_type": "text/plain; charset=utf-8",
+      "target": "overlay_only"
+    },
+    {
+      "path": "/robots.txt",
+      "file": "robots-backend.txt",
+      "content_type": "text/plain; charset=utf-8",
+      "target": "backend"
+    }
+  ]
+}
+```
+
+`target` may be `backend` or `overlay_only`, corresponding to `BACKEND_HOSTS`
+and `OVERLAY_ONLY_HOSTS`. Routes with the same path may coexist when their
+targets differ. Routes without `target` retain the existing overlay-server
+behavior.
+
+An overlay-only route can instead source its response from the configured
+gateway backend:
+
+```json
+{
+  "routes": [
+    {
+      "path": "/robots.txt",
+      "target": "overlay_only",
+      "source": "backend",
+      "source_host": "example.org",
+      "cache_statuses": [200]
+    }
+  ]
+}
+```
+
+The gateway sends the request to `BACKEND_URL` with `source_host` as its HTTP
+`Host`, caches selected responses for one hour, revalidates stale entries, and
+serves a stale cached response during temporary backend failures. Clients
+receive the sourced response directly; they are not redirected to the backend
+host. Backend sourcing uses a header-free `GET`, ignores client query strings,
+and exposes only `GET` and `HEAD` to clients. Backend-sourced routes require
+`BACKEND_URL`.
+
+Backend status codes and response bodies are preserved. `cache_statuses`
+selects which responses nginx caches and defaults to `[200]`. This also allows
+an overlay-only host to mirror and cache a backend error page without turning
+it into a successful response:
+
+```json
+{
+  "path": "/missing.txt",
+  "target": "overlay_only",
+  "source": "backend",
+  "source_host": "example.org",
+  "cache_statuses": [404]
+}
+```
+
+A targeted route can also return an error status directly. This does not query
+the backend or attempt to reproduce its error-page styling:
+
+```json
+{
+  "path": "/sitemap.xml",
+  "target": "overlay_only",
+  "status": 404
+}
+```
+
+Targeted routes are a general exact-route mechanism, not specific to
+`robots.txt`. They are gateway-only because nginx owns the host classification,
+local targeted responses, and backend proxy cache.
+
 ### Mail Account
 
 The `mail_account` module describes one mail account setup as structured data.
@@ -431,6 +515,9 @@ The gateway currently routes these paths to the overlay:
 - `/Autodiscover/Autodiscover.xml`
 - `/AutoDiscover/AutoDiscover.xml`
 - `/autodiscover/autodiscover.xml`
+
+It also serves exact paths declared with a `backend` or `overlay_only` route
+target, using the behavior described above.
 
 Run the gateway integration checks with Docker:
 

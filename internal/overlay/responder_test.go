@@ -50,6 +50,17 @@ func TestResponderRejectsUndeclaredRoute(t *testing.T) {
 	}
 }
 
+func TestResponderDoesNotExposeGatewayTargetedRoute(t *testing.T) {
+	responder := NewResponder(Config{
+		Routes: []Route{{Path: "/robots.txt", File: "robots.txt", Target: RouteTargetOverlayOnly}},
+	}, fstest.MapFS{"robots.txt": {Data: []byte("User-agent: *\n")}})
+
+	_, err := responder.Render("/robots.txt")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestResponderRendersMailAccountRoutes(t *testing.T) {
 	responder := NewResponder(Config{
 		MailAccount: testMailAccountWithManualSetup(),
