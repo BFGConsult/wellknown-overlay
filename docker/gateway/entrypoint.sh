@@ -123,7 +123,7 @@ write_backend_fallback() {
         proxy_set_header Connection \$connection_upgrade;
         proxy_set_header Host \$host;
         proxy_set_header X-Forwarded-Host \$host;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Proto \$forwarded_proto;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_pass ${BACKEND_URL};
     }
@@ -214,6 +214,11 @@ proxy_cache_path /var/cache/nginx/wellknown-overlay levels=1:2 keys_zone=wellkno
 map $http_upgrade $connection_upgrade {
     default upgrade;
     '' close;
+}
+
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    '' $scheme;
 }
 
 EOF

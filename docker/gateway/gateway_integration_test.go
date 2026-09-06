@@ -65,7 +65,16 @@ func TestGatewayIntegration(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(backendRoot, "index.html"), []byte("backend ok\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		runDocker(t, ctx, repoRoot, "run", "-d", "--name", backendName, "--network", network, "-v", backendRoot+":/usr/share/nginx/html:ro", "nginx:1.29-alpine")
+		backendConfig := filepath.Join(t.TempDir(), "default.conf")
+		if err := os.WriteFile(backendConfig, []byte(`server {
+    listen 80;
+    root /usr/share/nginx/html;
+    location = /forwarded-proto { return 200 "$http_x_forwarded_proto"; }
+}
+`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		runDocker(t, ctx, repoRoot, "run", "-d", "--name", backendName, "--network", network, "-v", backendRoot+":/usr/share/nginx/html:ro", "-v", backendConfig+":/etc/nginx/conf.d/default.conf:ro", "nginx:1.29-alpine")
 		t.Cleanup(func() {
 			cleanupDocker(t, context.Background(), "rm", "-f", backendName)
 		})
@@ -79,6 +88,25 @@ func TestGatewayIntegration(t *testing.T) {
 		waitForHealth(t, baseURL)
 
 		assertBackendFallbackSupportsWebSockets(t, ctx, repoRoot, gatewayName)
+		for _, tc := range []struct{ name, incoming, want string }{
+			{"https", "https", "https"},
+			{"http", "http", "http"},
+			{"absent", "", "http"},
+		} {
+			t.Run("forwarded proto "+tc.name, func(t *testing.T) {
+				req, err := http.NewRequest(http.MethodGet, baseURL+"/forwarded-proto", nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if tc.incoming != "" {
+					req.Header.Set("X-Forwarded-Proto", tc.incoming)
+				}
+				got := doAssert(t, http.Client{Timeout: 5 * time.Second}, req, http.StatusOK, "")
+				if got != tc.want {
+					t.Fatalf("backend received X-Forwarded-Proto %q, want %q", got, tc.want)
+				}
+			})
+		}
 		assertGET(t, baseURL+"/", http.StatusOK, "backend ok\n")
 		assertGET(t, baseURL+"/healthz", http.StatusOK, "ok\n")
 		assertGET(t, baseURL+"/mail/config-v1.1.xml", http.StatusOK, "<clientConfig")
@@ -491,7 +519,7 @@ func assertBackendFallbackSupportsWebSockets(t *testing.T, ctx context.Context, 
 		"proxy_set_header Connection $connection_upgrade;",
 		"proxy_set_header Host $host;",
 		"proxy_set_header X-Forwarded-Host $host;",
-		"proxy_set_header X-Forwarded-Proto $scheme;",
+		"proxy_set_header X-Forwarded-Proto $forwarded_proto;",
 		"proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;",
 	} {
 		if !strings.Contains(config, directive) {
